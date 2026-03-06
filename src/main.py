@@ -1,19 +1,36 @@
 import typer
+from enum import StrEnum
+from repository.storage import StorageType
+from data_service import DataService
+import os
 
 app = typer.Typer()
+dataService = DataService()
 
 
 @app.command()
-def hello(name: str):
-    print(f"Hello {name}")
+def migrate(
+    fDB=StorageType.DIRECTORY,
+    tDB=StorageType.FILE,
+    fromPath="./data",
+    toPath="./out",
+):
+    dataService.migrateDirectoryToFile(fromPath)
 
 
 @app.command()
-def goodbye(name: str, formal: bool = False):
-    if formal:
-        print(f"Goodbye Ms. {name}. Have a good day.")
-    else:
-        print(f"Bye {name}!")
+def sensors(
+    dataPath="./data",
+):
+    sensors = dataService.getAllSensors(dataPath)
+    print(sensors)
+
+
+@app.command()
+def plotTime(
+    sensorId: str = "",
+):
+    dataService.plotReceiveTimeVsSensorTime(sensorId)
 
 
 if __name__ == "__main__":
