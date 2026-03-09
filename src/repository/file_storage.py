@@ -3,10 +3,12 @@
 from enum import StrEnum
 from typing import Callable
 from repository.storage import Storage, StorageType
+from models.serializable import Serializable
 from pathlib import Path
+import orjson
 
 
-class FileStorage[T](Storage[T]):
+class FileStorage[T: Serializable](Storage[T]):
 
     def __init__(self, path: str):
         self.filePath = Path(path)
@@ -15,7 +17,7 @@ class FileStorage[T](Storage[T]):
 
     def add(self, item: T) -> str:
         with self.filePath.open("a") as file:
-            file.write(item.to_json() + "\n")
+            file.write(item.serialize() + "\n")
 
     def getAll(self, transformer: Callable[str, T]) -> list[T]:
         pass

@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
 from datetime import datetime
-from typing import Union, List
+from typing import Union, List, Self
+from models.serializable import Serializable
+import orjson
 
 
-@dataclass_json
 @dataclass
 class SensorData:
 
@@ -12,28 +12,24 @@ class SensorData:
     bt: int
 
 
-@dataclass_json
 @dataclass
 class SensorDataNameOnly:
 
     bn: str
 
 
-@dataclass_json
 @dataclass
 class SensorDataTimeOnly:
 
     bt: int
 
 
-@dataclass_json
 @dataclass
 class SensorDataUnit:
 
     bu: str
 
 
-@dataclass_json
 @dataclass
 class LoadData:
 
@@ -41,7 +37,6 @@ class LoadData:
     v: str
 
 
-@dataclass_json
 @dataclass
 class LoadDataVector:
 
@@ -49,9 +44,8 @@ class LoadDataVector:
     vs: str
 
 
-@dataclass_json
 @dataclass
-class SensorLogEvent:
+class SensorLogEvent(Serializable["SensorLogEvent"]):
 
     receiveTimeStamp: datetime
     load: List[
@@ -63,15 +57,13 @@ class SensorLogEvent:
         | LoadDataVector
     ]
 
-    def decoder(obj):
-        return SensorLogEvent(**obj)
-
-    def deserializeLine(line: str):
-        timestampString, loadString = line.split("] ", 1)
+    @classmethod
+    def deserializeLine(cls, text: str) -> Self:
+        timestampString, loadString = text.split("] ", 1)
         receiveTimeStamp = datetime.strptime(
             timestampString.strip("[]"), "%Y-%m-%d %H:%M:%S"
         )
         loadString = loadString.strip(" \n")
         loadString = loadString.replace("'", '"')
         logEventJson = f'{{"receiveTimeStamp": {receiveTimeStamp.timestamp()}, "load": {loadString}}}'
-        return SensorLogEvent.from_json(logEventJson)
+        return cls.deserialize(logEventJson)

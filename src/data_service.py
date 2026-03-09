@@ -20,41 +20,54 @@ class DataService:
 
     def getAllSensors(self, path: str):
         directoryStorage = DirectoryStorage[SensorLogEvent](path)
-        return [file.stem for file in directoryStorage.listFiles(None)]
+        return [file.stem for file in directoryStorage.listFiles(None, sort=False)]
 
     def plotReceiveTimeVsSensorTime(self, sensorId):
         fileStorage = FileStorage[SensorLogEvent](f"data/{sensorId}.txt")
         events = fileStorage.get(
             id=sensorId,
-            transformer=lambda itemStr: SensorLogEvent.from_json(itemStr),
+            transformer=lambda itemStr: SensorLogEvent.deserialize(itemStr),
         )
         timeDistribution = []
         for event in events:
             load = event.load
-            for obj in load:
-                receivedTimeStamp = event.receiveTimeStamp.timestamp()
-                receivedTimeStamp = (
-                    receivedTimeStamp * 1000
-                    if receivedTimeStamp <= 99999999991738355482
-                    else receivedTimeStamp
+            if any(obj.get("n") == "histogram" for obj in load):
+                sensorTimeStamp = next(
+                    (obj.get("bt") for obj in load if obj.get("bt") != None), None
                 )
-                if isinstance(obj, SensorData) or isinstance(obj, SensorDataTimeOnly):
-                    sensorTimeStamp = obj.bt
+                if sensorTimeStamp:
                     sensorTimeStamp = (
                         sensorTimeStamp * 1000
                         if sensorTimeStamp <= 9999999999
                         else sensorTimeStamp
                     )
+                    receivedTimeStamp = event.receiveTimeStamp
+                    receivedTimeStamp = (
+                        receivedTimeStamp * 1000
+                        if receivedTimeStamp <= 9999999999
+                        else receivedTimeStamp
+                    )
                     delay = receivedTimeStamp - sensorTimeStamp
                     delay /= 1000
                     timeDistribution.append(delay)
 
-        # plt.hist(timeDistribution, bins="auto", edgecolor="grey", alpha=0.7)
-        x = [i for i in range(len(timeDistribution))]
-
         fig, ax = plt.subplots()
 
-        ax.plot(x, timeDistribution, "-")
+        # quantiles = np.percentile(timeDistribution, [25, 50, 75])
+
+        ax.hist(timeDistribution, bins="auto", edgecolor="grey", alpha=0.7)
+        # x = [i for i in range(len(timeDistribution))]
+
+        # for q in quantiles:
+        #     ax.axvline(
+        #         q,
+        #         color="red",
+        #         linestyle="--",
+        #         linewidth=2,
+        #         label=f"Q{int(q)}" if q == 50 else f"Q{int(q)}",
+        #     )
+
+        # ax.plot(x, timeDistribution, "-")
         plt.title("Distribution Plot (Histogram)")
         plt.xlabel("Event")
         plt.ylabel("Delay")

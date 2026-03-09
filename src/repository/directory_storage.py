@@ -13,17 +13,27 @@ class DirectoryStorage[T](Storage[T]):
     def __init__(self, path: str):
         self.rootPath = Path(path)
 
-    def listDirectories(self, path: Path) -> list[str]:
+    def listDirectories(self, path: Path, sort=True) -> list[str]:
         dirPath = path if path else self.rootPath
         if dirPath.exists():
-            return [item for item in dirPath.iterdir() if item.is_dir()]
+            dirlist = [item for item in dirPath.iterdir() if item.is_dir()]
+            return (
+                sorted(dirlist, key=lambda dirItem: int(dirItem.stem))
+                if sort
+                else dirlist
+            )
         else:
             return []
 
-    def listFiles(self, path: Path | None) -> list[str]:
+    def listFiles(self, path: Path | None, sort=True) -> list[str]:
         dirPath = path if path else self.rootPath
         if dirPath.exists():
-            return [item for item in dirPath.iterdir() if item.is_file()]
+            fileList = [item for item in dirPath.iterdir() if item.is_file()]
+            return (
+                sorted(fileList, key=lambda fileItem: int(fileItem.stem))
+                if sort
+                else fileList
+            )
         else:
             return []
 
@@ -31,24 +41,24 @@ class DirectoryStorage[T](Storage[T]):
         pass
 
     def getAll(self, transformer: Callable[str, T]) -> dict[str, list[T]]:
+        sensorsFiles = {}
         sensorsEvents = {}
-        sensors = self.listDirectories(None)
-        days = list()
+        sensorDirectories = self.listDirectories(None, sort=False)
 
-        for sensor in sensors:
-            sensorsEvents[sensor.stem] = []
-            for year in self.listDirectories(sensor):
+        for sensorPath in sensorDirectories:
+            sensorId = sensorPath.stem
+            sensorsFiles[sensorId] = list()
+            sensorsEvents[sensorPath.stem] = list()
+            for year in self.listDirectories(sensorPath):
                 for month in self.listDirectories(year):
-                    days.extend(self.listFiles(month))
+                    sensorsFiles[sensorId].extend(self.listFiles(month))
 
-        days = sorted(days, key=lambda day: int(day.stem))
-
-        for filePath in days:
-            sensor = filePath.parts[1]
-            print(filePath)
-            with filePath.open("r") as file:
-                items = [transformer(line) for line in file]
-                sensorsEvents[sensor].extend(items)
+        for sensorId, sensorFiles in sensorsFiles.items():
+            for filePath in sensorFiles:
+                print(filePath)
+                with filePath.open("r") as file:
+                    items = [transformer(line) for line in file]
+                    sensorsEvents[sensorId].extend(items)
 
         return sensorsEvents
 

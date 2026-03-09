@@ -1,5 +1,5 @@
 ## Setup
-`pip install typer dataclasses_json matplotlib`
+`pip install -r requirements.txt`
 
 ## Run
 `python src/main.py --help`
@@ -15,3 +15,4 @@
 - Compare the times.
 - Check the gaps.
 - Accumullated data.
+- InfluxDB match data.

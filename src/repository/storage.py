@@ -1,7 +1,6 @@
 from enum import StrEnum
 from abc import ABC, abstractmethod
 from typing import Callable
-from dataclasses_json import DataClassJsonMixin
 
 
 class StorageType(StrEnum):
@@ -10,7 +9,7 @@ class StorageType(StrEnum):
     INFLUXDB = "influxdb"
 
 
-class Storage[T: DataClassJsonMixin](ABC):
+class Storage[T](ABC):
 
     @abstractmethod
     def add(self, item: T) -> str:
