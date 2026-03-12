@@ -65,5 +65,5 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
         )
         loadString = loadString.strip(" \n")
         loadString = loadString.replace("'", '"')
-        logEventJson = f'{{"receiveTimeStamp": {receiveTimeStamp.timestamp()}, "load": {loadString}}}'
+        logEventJson = f'{{"receiveTimeStamp": {int(receiveTimeStamp.timestamp())}, "load": {loadString}}}'
         return cls.deserialize(logEventJson)

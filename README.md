@@ -1,5 +1,14 @@
-## Setup
-`pip install -r requirements.txt`
+# Artemis
+This is a data management script for old sensor data for the Artemis project.
+
+## setup
+
+### How to setup the python environment.
+```shell
+python -m .venv .
+pip install -r requirements.txt
+source .venv/bin/activate
+```
 
 ## Run
 `python src/main.py --help`

@@ -9,13 +9,10 @@ dataService = DataService()
 
 
 @app.command()
-def migrate(
-    fDB=StorageType.DIRECTORY,
-    tDB=StorageType.FILE,
-    fromPath="./data",
-    toPath="./out",
+def collectToFile(
+    dataPath="./data",
 ):
-    dataService.migrateDirectoryToFile(fromPath)
+    dataService.migrateDirectoryToFile(dataPath)
 
 
 @app.command()
@@ -27,10 +24,30 @@ def sensors(
 
 
 @app.command()
-def plotTime(
+def plotReceiveDelay(
     sensorId: str = "",
 ):
-    dataService.plotReceiveTimeVsSensorTime(sensorId)
+    dataService.plotReceiveDelay(sensorId)
+
+
+@app.command()
+def plotTimeGap(
+    dataPath="./data",
+    sensorId: str = "",
+):
+    if sensorId == "":
+        for sensor in dataService.getAllSensors(dataPath):
+            dataService.plotTimeGap(sensor)
+    else:
+        dataService.plotTimeGap(sensorId)
+
+
+@app.command()
+def migrate(
+    dataPath="./data",
+    sensorId: str = "",
+):
+    dataService.migrateDataToInfluxDB(dataPath, sensorId)
 
 
 if __name__ == "__main__":

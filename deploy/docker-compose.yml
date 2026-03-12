@@ -1,0 +1,78 @@
+version: "3.8"
+
+services:
+  influxdb:
+    image: influxdb:3.8-core
+    container_name: influxdb
+    restart: always
+    networks:
+      - influxnet
+    ports:
+      - "8181:8181"
+    command:
+      - influxdb3
+      - serve
+      - --node-id=node0
+      - --object-store=file
+      - --data-dir=/var/lib/influxdb3/data
+      - --plugin-dir=/var/lib/influxdb3/plugins
+    volumes:
+      - influxdb_data:/var/lib/influxdb3/data
+      - influxdb_plugins:/var/lib/influxdb3/plugins
+
+  influxdb3-ui:
+    image: influxdata/influxdb3-ui:latest
+    container_name: influxdb-ui
+    ports:
+      - "80:80"
+    volumes:
+      - influxdb_ui_db:/db:rw
+      - influxdb_ui_config:/app-root/config:ro
+    environment:
+      SESSION_SECRET_KEY: "${SESSION_SECRET_KEY:-$(openssl rand -hex 32)}"
+    restart: always
+    networks:
+      - influxnet
+    command: ["--mode=admin"]
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    restart: always
+    networks:
+      - influxnet
+    depends_on:
+      - influxdb
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin1234
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+networks:
+  influxnet:
+
+volumes:
+  influxdb_data:
+    driver_opts:
+      type: none
+      o: bind
+      device: ~/artemis/data
+  influxdb_plugins:
+    driver_opts:
+      type: none
+      o: bind
+      device: ~/artemis/plugins
+  influxdb_ui_db:
+    driver_opts:
+      type: none
+      o: bind
+      device: ~/artemis/ui_db
+  influxdb_ui_config:
+    driver_opts:
+      type: none
+      o: bind
+      device: ~/artemis/ui_config
+  grafana_data:
