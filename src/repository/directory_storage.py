@@ -3,12 +3,12 @@
 # per year which includes a directory per month which includes a file per day.
 
 from repository.storage import Storage
+from models.sensor_log_event import SensorLogEvent
 from typing import Callable
 from pathlib import Path
-import os
 
 
-class DirectoryStorage[T](Storage[T]):
+class DirectoryStorage(Storage[SensorLogEvent]):
 
     def __init__(self, path: str):
         self.rootPath = Path(path)
@@ -37,35 +37,37 @@ class DirectoryStorage[T](Storage[T]):
         else:
             return []
 
-    def add(self, item: T) -> str:
-        pass
-
-    def getAll(self, transformer: Callable[str, T]) -> dict[str, list[T]]:
-        sensorsFiles = {}
-        sensorsEvents = {}
+    def getAll(self) -> list[tuple[str, list[SensorLogEvent]]]:
+        sensorsEvents = []
         sensorDirectories = self.listDirectories(None, sort=False)
 
         for sensorPath in sensorDirectories:
             sensorId = sensorPath.stem
-            sensorsFiles[sensorId] = list()
-            sensorsEvents[sensorPath.stem] = list()
-            for year in self.listDirectories(sensorPath):
-                for month in self.listDirectories(year):
-                    sensorsFiles[sensorId].extend(self.listFiles(month))
-
-        for sensorId, sensorFiles in sensorsFiles.items():
-            for filePath in sensorFiles:
-                print(filePath)
-                with filePath.open("r") as file:
-                    items = [transformer(line) for line in file]
-                    sensorsEvents[sensorId].extend(items)
+            sensorEvents = self.get(sensorId)
+            sensorsEvents.append((sensorId, sensorEvents))
 
         return sensorsEvents
 
-    def get(self, id, transformer: Callable[str, T]) -> T:
+    def add(self, event: SensorLogEvent) -> str:
         pass
 
-    def update(self, item: T) -> str:
+    def get(self, id) -> list[SensorLogEvent]:
+        sensorFiles = []
+        sensorEvents = []
+
+        for year in self.listDirectories(self.rootPath / id):
+            for month in self.listDirectories(year):
+                sensorFiles.extend(self.listFiles(month))
+
+        for filePath in sensorFiles:
+            print(filePath)
+            with filePath.open("r") as file:
+                fileEvents = [SensorLogEvent.deserialize(line) for line in file]
+                sensorEvents.extend(fileEvents)
+
+        return sensorEvents
+
+    def update(self, event: SensorLogEvent) -> str:
         pass
 
     def remove(self, id) -> bool:

@@ -1,32 +1,58 @@
 from repository.directory_storage import DirectoryStorage
-from influxdb_client_3 import Point
 from repository.file_storage import FileStorage
+from datetime import datetime
+from influxdb_client_3 import Point
 from repository.influxdb_storage import InfluxDBStorage
-from models.sensor_log_event import SensorLogEvent, SensorData, SensorDataTimeOnly
+from models.sensor_log_event import SensorLogEvent
+from models.sensor_event import SensorEvent, SensorEvents
 from models.sensor_data_point import SensorDataPoint
-import matplotlib.pyplot as plt
-import numpy as np
-import mplcursors
+from timestamps_recoverer import TimestampsRecoverer
 
 
 class DataService:
 
     def migrateDirectoryToFile(self, dataPath: str):
-        directoryStorage = DirectoryStorage[SensorLogEvent](dataPath)
-        sensorEvents = directoryStorage.getAll(
-            transformer=lambda itemStr: SensorLogEvent.deserializeLine(itemStr),
-        )
-        for sensor, events in sensorEvents.items():
-            fileStorage = FileStorage(f"{dataPath}/{sensor}.txt")
-            for event in events:
-                fileStorage.add(event)
+        directoryStorage = DirectoryStorage(dataPath)
+        sensorsLogEvents = directoryStorage.getAll()
+        for sensorId, logEvents in sensorsLogEvents:
+            fileStorage = FileStorage[SensorLogEvent](
+                f"{dataPath}/{sensorId}.txt", SensorLogEvent
+            )
+            for logEvent in logEvents:
+                fileStorage.add(logEvent)
+
+    def migrateDirectoryToCleanData(self, dataPath: str):
+        directoryStorage = DirectoryStorage(dataPath)
+        sensorsLogEvents = directoryStorage.getAll()
+        for sensorId, logEvents in sensorsLogEvents:
+            fileStorage = FileStorage[SensorEvent](
+                f"{dataPath}/{sensorId}.clean.txt", SensorEvent
+            )
+            for logEvent in logEvents:
+                fileStorage.add(logEvent.toSensorEvent())
 
     def getAllSensors(self, path: str):
-        directoryStorage = DirectoryStorage[SensorLogEvent](path)
-        return [file.stem for file in directoryStorage.listFiles(None, sort=False)]
+        directoryStorage = DirectoryStorage(path)
+        return [
+            directory.stem
+            for directory in directoryStorage.listDirectories(None, sort=False)
+        ]
+
+    def recoverTimestamps(self, dataPath: str, sensorId):
+        fileStorage = FileStorage[SensorEvent](
+            f"{dataPath}/{sensorId}.txt", SensorEvent
+        )
+        events = fileStorage.get(sensorId)
+        events = [event.toSensorEvent() for event in events]
+        sensorEvents = SensorEvents(sensorId, events)
+        # events = SensorEvents(sensorId, events).histogramEvents()
+        recoverer = TimestampsRecoverer(sensorEvents)
+        # sensorEvents = recoverer.recoverTimestamps()
 
     def migrateDataToInfluxDB(self, dataPath: str, sensorId):
-        fileStorage = FileStorage(f"{dataPath}/{sensorId}.txt")
+        fileStorage = FileStorage[SensorEvent](
+            f"{dataPath}/{sensorId}.txt", SensorEvent
+        )
         events = fileStorage.get(
             id=sensorId,
             transformer=lambda itemStr: SensorLogEvent.deserialize(itemStr),
@@ -48,89 +74,22 @@ class DataService:
         dbStorage = InfluxDBStorage(sensorId)
         dbStorage.add(points)
 
-    def addCursor(self, ax):
-        cursor = mplcursors.cursor(ax, hover=True)
-        cursor.connect(
-            "add",
-            lambda sel: sel.annotation.set_text(
-                f"x={sel.target[0]:.2f}, y={sel.target[1]:.2f}"
-            ),
-        )
-
-    def isHistogramEvent(self, event) -> list[SensorLogEvent]:
-        return any(
-            obj.get("n") == "histogram" or "histogram" in (obj.get("bn") or "")
-            for obj in event.load
-        )
-
     def plotReceiveDelay(self, sensorId):
-        fileStorage = FileStorage[SensorLogEvent](f"data/{sensorId}.txt")
-        events = fileStorage.get(
-            id=sensorId,
-            transformer=lambda itemStr: SensorLogEvent.deserialize(itemStr),
+        print(f"=============================== {sensorId}")
+        fileStorage = FileStorage[SensorEvent](
+            f"data/{sensorId}.clean.txt", SensorEvent
         )
-        timeDistribution = []
-        for event in events:
-            load = event.load
-            if self.isHistogramEvent(event):
-                sensorTimeStamp = next(
-                    (obj.get("bt") for obj in load if obj.get("bt") != None), None
-                )
-                if sensorTimeStamp:
-                    sensorTimeStamp = (
-                        sensorTimeStamp * 1000
-                        if sensorTimeStamp <= 9999999999
-                        else sensorTimeStamp
-                    )
-                    receivedTimeStamp = event.receiveTimeStamp
-                    receivedTimeStamp = (
-                        receivedTimeStamp * 1000
-                        if receivedTimeStamp <= 9999999999
-                        else receivedTimeStamp
-                    )
-                    delay = receivedTimeStamp - sensorTimeStamp
-                    timeDistribution.append(delay)
+        events = fileStorage.get(sensorId)
+        sensorEvents = SensorEvents(sensorId, events)
+        quantile90 = sensorEvents.getReceiveDelayQuantile(0.95)
+        sensorEvents.plotReceiveDelay(quantile90)
 
-        fig, ax = plt.subplots()
-        ax.hist(timeDistribution, bins="auto", edgecolor="grey", alpha=0.7)
-        plt.title(
-            "Delay Histogram (Negative delay < 1000ms due to receive time is captured with second accuracy)"
+    def plotReceiveInterval(self, sensorId):
+        print(f"=============================== {sensorId}")
+        fileStorage = FileStorage[SensorEvent](
+            f"data/{sensorId}.clean.txt", SensorEvent
         )
-        plt.xlabel("Delay [ms]")
-        plt.ylabel("Count")
-        plt.grid(True, alpha=0.3)
-        self.addCursor(ax)
-        plt.show()
-
-    def plotTimeGap(self, sensorId):
-        fileStorage = FileStorage[SensorLogEvent](f"data/{sensorId}.txt")
-        events = fileStorage.get(
-            id=sensorId,
-            transformer=lambda itemStr: SensorLogEvent.deserialize(itemStr),
-        )
-        events = [event for event in events if self.isHistogramEvent(event)]
-        timeDistribution = []
-        for index in range(len(events) - 1):
-            currentEvent = events[index]
-            currentEventTimestamp = currentEvent.receiveTimeStamp
-
-            nextEvent = events[index + 1]
-            nextEventTimestamp = nextEvent.receiveTimeStamp
-
-            delay = nextEventTimestamp - currentEventTimestamp
-            # if delay > 20 * 60:
-            #     print(currentEventTimestamp)
-            timeDistribution.append(delay)
-
-        fig, ax = plt.subplots()
-        x = range(len(timeDistribution))
-        ax.plot(x, timeDistribution, "bo-", label="Squared values")
-        plt.title("Delay consecutive timestamps")
-        plt.xlabel("Event [#]")
-        plt.ylabel("Delay [s]")
-        plt.grid(True, alpha=0.3)
-        self.addCursor(ax)
-        plt.show()
-
-    def migrateToInfluxDB(self, sensorId):
-        pass
+        events = fileStorage.get(sensorId)
+        sensorEvents = SensorEvents(sensorId, events)
+        quantile90 = sensorEvents.getReceiveIntervalQuantile(0.95)
+        sensorEvents.plotReceiveInterval(quantile90)

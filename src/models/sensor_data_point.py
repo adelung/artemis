@@ -1,6 +1,8 @@
+# Data class for storing sensor events on InfluxDB.
+
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Union, Self
+from typing import Self
 from models.serializable import Serializable
 from models.sensor_log_event import SensorLogEvent
 
@@ -24,7 +26,7 @@ class SensorDataPoint(Serializable["SensorDataPoint"]):
                 histogram = obj.get("vs")
         if size and histogram:
             return SensorDataPoint(
-                time=event.receiveTimeStamp,
+                time=event.receiveTimestamp,
                 sensorId=sensorId,
                 size=size,
                 histogram=histogram,

@@ -1,12 +1,4 @@
-from enum import StrEnum
 from abc import ABC, abstractmethod
-from typing import Callable
-
-
-class StorageType(StrEnum):
-    DIRECTORY = "directory"
-    FILE = "file"
-    INFLUXDB = "influxdb"
 
 
 class Storage[T](ABC):
@@ -16,11 +8,7 @@ class Storage[T](ABC):
         pass
 
     @abstractmethod
-    def getAll(self, transformer: Callable[str, T]) -> list[T]:
-        pass
-
-    @abstractmethod
-    def get(self, id, transformer: Callable[str, T]) -> T:
+    def get(self, id) -> list[T]:
         pass
 
     @abstractmethod

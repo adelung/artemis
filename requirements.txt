@@ -3,3 +3,4 @@ matplotlib == 3.10.8
 mplcursors == 0.7
 orjson == 3.11.7
 influxdb3-python == 0.18.0
+urnparse == 0.2.2

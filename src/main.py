@@ -1,8 +1,5 @@
 import typer
-from enum import StrEnum
-from repository.storage import StorageType
 from data_service import DataService
-import os
 
 app = typer.Typer()
 dataService = DataService()
@@ -16,6 +13,13 @@ def collectToFile(
 
 
 @app.command()
+def collectToCleanData(
+    dataPath="./data",
+):
+    dataService.migrateDirectoryToCleanData(dataPath)
+
+
+@app.command()
 def sensors(
     dataPath="./data",
 ):
@@ -25,21 +29,38 @@ def sensors(
 
 @app.command()
 def plotReceiveDelay(
-    sensorId: str = "",
-):
-    dataService.plotReceiveDelay(sensorId)
-
-
-@app.command()
-def plotTimeGap(
     dataPath="./data",
     sensorId: str = "",
 ):
     if sensorId == "":
         for sensor in dataService.getAllSensors(dataPath):
-            dataService.plotTimeGap(sensor)
+            dataService.plotReceiveDelay(sensor)
     else:
-        dataService.plotTimeGap(sensorId)
+        dataService.plotReceiveDelay(sensorId)
+
+
+@app.command()
+def plotReceiveInterval(
+    dataPath="./data",
+    sensorId: str = "",
+):
+    if sensorId == "":
+        for sensor in dataService.getAllSensors(dataPath):
+            dataService.plotReceiveInterval(sensor)
+    else:
+        dataService.plotReceiveInterval(sensorId)
+
+
+@app.command()
+def recoverTimestamps(
+    dataPath="./data",
+    sensorId: str = "",
+):
+    if sensorId == "":
+        for sensorId in dataService.getAllSensors(dataPath):
+            dataService.recoverTimestamps(dataPath, sensorId)
+    else:
+        dataService.recoverTimestamps(dataPath, sensorId)
 
 
 @app.command()
