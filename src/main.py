@@ -6,25 +6,18 @@ dataService = DataService()
 
 
 @app.command()
-def collectToFile(
-    dataPath="./data",
-):
-    dataService.migrateDirectoryToFile(dataPath)
-
-
-@app.command()
-def collectToCleanData(
-    dataPath="./data",
-):
-    dataService.migrateDirectoryToCleanData(dataPath)
-
-
-@app.command()
 def sensors(
     dataPath="./data",
 ):
-    sensors = dataService.getAllSensors(dataPath)
-    print(sensors)
+    sensorsIds = dataService.getAllSensors(dataPath)
+    print(sensorsIds)
+
+
+@app.command()
+def collectToFile(
+    dataPath="./data",
+):
+    dataService.collectDirectoryToFile(dataPath)
 
 
 @app.command()
@@ -33,8 +26,8 @@ def plotReceiveDelay(
     sensorId: str = "",
 ):
     if sensorId == "":
-        for sensor in dataService.getAllSensors(dataPath):
-            dataService.plotReceiveDelay(sensor)
+        for sensorId in dataService.getAllSensors(dataPath):
+            dataService.plotReceiveDelay(sensorId)
     else:
         dataService.plotReceiveDelay(sensorId)
 
@@ -45,30 +38,34 @@ def plotReceiveInterval(
     sensorId: str = "",
 ):
     if sensorId == "":
-        for sensor in dataService.getAllSensors(dataPath):
-            dataService.plotReceiveInterval(sensor)
+        for sensorId in dataService.getAllSensors(dataPath):
+            dataService.plotReceiveInterval(sensorId)
     else:
         dataService.plotReceiveInterval(sensorId)
 
 
 @app.command()
-def recoverTimestamps(
+def recoverData(
     dataPath="./data",
     sensorId: str = "",
 ):
     if sensorId == "":
         for sensorId in dataService.getAllSensors(dataPath):
-            dataService.recoverTimestamps(dataPath, sensorId)
+            dataService.recoverData(dataPath, sensorId)
     else:
-        dataService.recoverTimestamps(dataPath, sensorId)
+        dataService.recoverData(dataPath, sensorId)
 
 
 @app.command()
-def migrate(
+def exportToInfluxDB(
     dataPath="./data",
     sensorId: str = "",
 ):
-    dataService.migrateDataToInfluxDB(dataPath, sensorId)
+    if sensorId == "":
+        for sensorId in dataService.getAllSensors(dataPath):
+            dataService.exportToInfluxDB(dataPath, sensorId)
+    else:
+        dataService.exportToInfluxDB(dataPath, sensorId)
 
 
 if __name__ == "__main__":

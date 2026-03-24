@@ -23,5 +23,6 @@ source .venv/bin/activate
 - Put together all the files.
 - Compare the times.
 - Check the gaps.
-- Accumullated data.
-- InfluxDB match data.
+- Fix summer to winter and vice versa time jumps
+- Fix Accumulated histogram data.
+- Export to InfluxDB.

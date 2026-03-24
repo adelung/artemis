@@ -6,50 +6,46 @@ from repository.influxdb_storage import InfluxDBStorage
 from models.sensor_log_event import SensorLogEvent
 from models.sensor_event import SensorEvent, SensorEvents
 from models.sensor_data_point import SensorDataPoint
-from timestamps_recoverer import TimestampsRecoverer
+from data_recovery import DataRecovery
 
 
 class DataService:
 
-    def migrateDirectoryToFile(self, dataPath: str):
-        directoryStorage = DirectoryStorage(dataPath)
-        sensorsLogEvents = directoryStorage.getAll()
-        for sensorId, logEvents in sensorsLogEvents:
-            fileStorage = FileStorage[SensorLogEvent](
-                f"{dataPath}/{sensorId}.txt", SensorLogEvent
-            )
-            for logEvent in logEvents:
-                fileStorage.add(logEvent)
-
-    def migrateDirectoryToCleanData(self, dataPath: str):
-        directoryStorage = DirectoryStorage(dataPath)
-        sensorsLogEvents = directoryStorage.getAll()
-        for sensorId, logEvents in sensorsLogEvents:
-            fileStorage = FileStorage[SensorEvent](
-                f"{dataPath}/{sensorId}.clean.txt", SensorEvent
-            )
-            for logEvent in logEvents:
-                fileStorage.add(logEvent.toSensorEvent())
-
-    def getAllSensors(self, path: str):
+    def getAllSensors(self, path: str) -> list[str]:
         directoryStorage = DirectoryStorage(path)
         return [
             directory.stem
             for directory in directoryStorage.listDirectories(None, sort=False)
         ]
 
-    def recoverTimestamps(self, dataPath: str, sensorId):
-        fileStorage = FileStorage[SensorEvent](
+    def collectDirectoryToFile(self, dataPath: str):
+        directoryStorage = DirectoryStorage(dataPath)
+        sensorsLogEvents = directoryStorage.getAll()
+        for sensorId, logEvents in sensorsLogEvents:
+            fileStorage = FileStorage[SensorEvent](
+                f"{dataPath}/{sensorId}.txt", SensorEvent
+            )
+            for logEvent in logEvents:
+                fileStorage.add(logEvent.toSensorEvent())
+
+    def recoverData(self, dataPath: str, sensorId):
+        fileStorageInput = FileStorage[SensorEvent](
             f"{dataPath}/{sensorId}.txt", SensorEvent
         )
-        events = fileStorage.get(sensorId)
-        events = [event.toSensorEvent() for event in events]
-        sensorEvents = SensorEvents(sensorId, events)
-        # events = SensorEvents(sensorId, events).histogramEvents()
-        recoverer = TimestampsRecoverer(sensorEvents)
-        # sensorEvents = recoverer.recoverTimestamps()
+        events = fileStorageInput.get(sensorId)
 
-    def migrateDataToInfluxDB(self, dataPath: str, sensorId):
+        sensorEvents = SensorEvents(sensorId, events)
+        recoverer = DataRecovery(sensorEvents)
+        sensorEvents = recoverer.recoverReceiveTimestamps()
+        # sensorEvents = recoverer.recoverSensorTimestamps()
+
+        fileStorageOutput = FileStorage[SensorEvent](
+            f"{dataPath}/{sensorId}.fixed.txt", SensorEvent
+        )
+        for event in sensorEvents.events:
+            fileStorageOutput.add(event)
+
+    def exportToInfluxDB(self, dataPath: str, sensorId):
         fileStorage = FileStorage[SensorEvent](
             f"{dataPath}/{sensorId}.txt", SensorEvent
         )
@@ -90,6 +86,9 @@ class DataService:
             f"data/{sensorId}.clean.txt", SensorEvent
         )
         events = fileStorage.get(sensorId)
-        sensorEvents = SensorEvents(sensorId, events)
-        quantile90 = sensorEvents.getReceiveIntervalQuantile(0.95)
-        sensorEvents.plotReceiveInterval(quantile90)
+        sensorEvents = (
+            SensorEvents(sensorId, events).noneStatusEvents().histogramEvents()
+        )
+        # mean = sensorEvents.getReceiveIntervalMeanValueWithinQuantile(0.99)
+        # print(f"Receive interval mean value: {mean}")
+        sensorEvents.plotReceiveInterval(700)

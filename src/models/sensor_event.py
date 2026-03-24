@@ -1,7 +1,7 @@
 # Data structure and aggregator for the sensor events for processing.
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from models.serializable import Serializable
 import matplotlib.pyplot as plt
 import mplcursors
@@ -85,8 +85,8 @@ class SensorMic:
 @dataclass
 class SensorEvent(Serializable["SensorEvent"]):
 
-    receiveTimestamp: datetime
-    sensorTimestamp: datetime
+    receiveTimestamp: int
+    sensorTimestamp: int
     urn: str
     load: (
         SensorGatewayStatus
@@ -108,13 +108,13 @@ class SensorEvents:
         self.sensorId = sensorId
         self.events = events
 
-    def getReceiveIntervalQuantile(self, percentile: float) -> float:
+    def getReceiveIntervalQuantile(self, quantile: float) -> float:
         distribution = [
             self.events[index + 1].receiveTimestamp
             - self.events[index].receiveTimestamp
             for index in range(len(self.events) - 1)
         ]
-        quantileValue = np.quantile(distribution, percentile)
+        quantileValue = np.quantile(distribution, quantile)
         # print(f"sensorId: {self.sensorId} quantileValue: {quantileValue}")
         # distribution = [value for value in distribution if abs(value) < quantileValue]
         # fig, ax = plt.subplots()
@@ -124,13 +124,13 @@ class SensorEvents:
         # plt.show()
         return quantileValue
 
-    def getReceiveDelayQuantile(self, percentile: float) -> float:
+    def getReceiveDelayQuantile(self, quantile: float) -> float:
         distribution = [
             event.receiveTimestamp - event.sensorTimestamp
             for event in self.events
             if event.sensorTimestamp
         ]
-        quantileValue = np.quantile(distribution, percentile)
+        quantileValue = np.quantile(distribution, quantile)
         # print(f"sensorId: {self.sensorId} quantileValue: {quantileValue}")
         # distribution = [value for value in distribution if abs(value) < quantileValue]
         # fig, ax = plt.subplots()
@@ -139,6 +139,32 @@ class SensorEvents:
         # self.addCursor(ax)
         # plt.show()
         return quantileValue
+
+    def getReceiveIntervalMeanValueWithinQuantile(self, quantile: float) -> float:
+        distribution = [
+            self.events[index + 1].receiveTimestamp
+            - self.events[index].receiveTimestamp
+            for index in range(len(self.events) - 1)
+        ]
+        qLower = np.quantile(distribution, 1 - quantile)
+        qUpper = np.quantile(distribution, quantile)
+        quantileRange = qUpper - qLower
+        lowerBound = qLower
+        upperBound = qUpper
+        filteredDistribution = list(
+            filter(
+                lambda value: value >= lowerBound and value <= upperBound, distribution
+            )
+        )
+        meanValue = np.mean(filteredDistribution)
+        # print(f"sensorId: {self.sensorId} quantileValue: {quantileValue}")
+        # distribution = [value for value in distribution if abs(value) < quantileValue]
+        # fig, ax = plt.subplots()
+        # ax.hist(distribution, bins="auto", edgecolor="grey", alpha=0.7)
+        # plt.grid(True, alpha=0.3)
+        # self.addCursor(ax)
+        # plt.show()
+        return meanValue
 
     # TODO: Maybe return another event (like pressure of gyro) timestamp instead of receiveTimestamp.
     def getSensorUpdateTime(self) -> datetime:
@@ -152,7 +178,13 @@ class SensorEvents:
     def histogramEvents(self) -> "SensorEvents":
         return SensorEvents(
             self.sensorId,
-            [event for event in self.events if isinstance(event, SensorHistogram)],
+            [event for event in self.events if "histogram" in event.urn],
+        )
+
+    def noneStatusEvents(self) -> "SensorEvents":
+        return SensorEvents(
+            self.sensorId,
+            [event for event in self.events if "gw" not in event.urn],
         )
 
     def plotReceiveDelay(self, upTo: float):
@@ -181,11 +213,13 @@ class SensorEvents:
             currentEventTimestamp = currentEvent.receiveTimestamp
             nextEvent = self.events[index + 1]
             nextEventTimestamp = nextEvent.receiveTimestamp
-            delay = nextEventTimestamp - currentEventTimestamp
-            if delay < upTo:
-                timeDistribution.append(delay)
+            interval = nextEventTimestamp - currentEventTimestamp
+            if interval < upTo:
+                timeDistribution.append(interval)
             else:
-                print(delay)
+                print(
+                    f"Event: {datetime.fromtimestamp(currentEvent.receiveTimestamp, tz=timezone.utc)} Interval: {interval}"
+                )
             # if delay > 60 * 60:
             #     currentHistogram = currentEvent.load.histogram
             #     nextHistogram = nextEvent.load.histogram
