@@ -1,71 +1,77 @@
 import typer
+from typing import Annotated, Callable
 from data_service import DataService
 
 app = typer.Typer()
-dataService = DataService()
+dataService = DataService("./data", "./data")
 
 
 @app.command()
-def sensors(
-    dataPath="./data",
-):
-    sensorsIds = dataService.getAllSensors(dataPath)
+def sensors():
+    sensorsIds = dataService.getAllSensors()
     print(sensorsIds)
 
 
 @app.command()
 def collectToFile(
-    dataPath="./data",
+    sensorId: str = "",
+    iso: Annotated[bool, typer.Option("--iso")] = False,
 ):
-    dataService.collectDirectoryToFile(dataPath)
+    runAllSensors(
+        sensorId,
+        lambda id: dataService.collectDirectoryToFile(id, iso),
+    )
 
 
 @app.command()
 def plotReceiveDelay(
-    dataPath="./data",
     sensorId: str = "",
 ):
-    if sensorId == "":
-        for sensorId in dataService.getAllSensors(dataPath):
-            dataService.plotReceiveDelay(sensorId)
-    else:
-        dataService.plotReceiveDelay(sensorId)
+    runAllSensors(
+        sensorId,
+        lambda id: dataService.plotReceiveDelay(id),
+    )
 
 
 @app.command()
 def plotReceiveInterval(
-    dataPath="./data",
     sensorId: str = "",
 ):
-    if sensorId == "":
-        for sensorId in dataService.getAllSensors(dataPath):
-            dataService.plotReceiveInterval(sensorId)
-    else:
-        dataService.plotReceiveInterval(sensorId)
+    runAllSensors(
+        sensorId,
+        lambda id: dataService.plotReceiveInterval(id),
+    )
 
 
 @app.command()
 def recoverData(
-    dataPath="./data",
     sensorId: str = "",
 ):
-    if sensorId == "":
-        for sensorId in dataService.getAllSensors(dataPath):
-            dataService.recoverData(dataPath, sensorId)
-    else:
-        dataService.recoverData(dataPath, sensorId)
+    runAllSensors(
+        sensorId,
+        lambda id: dataService.recoverData(id),
+    )
 
 
 @app.command()
 def exportToInfluxDB(
-    dataPath="./data",
     sensorId: str = "",
 ):
+    runAllSensors(
+        sensorId,
+        lambda id: dataService.exportToInfluxDB(id),
+    )
+
+
+def runAllSensors(
+    sensorId: str | None,
+    task: Callable[[str], None],
+):
     if sensorId == "":
-        for sensorId in dataService.getAllSensors(dataPath):
-            dataService.exportToInfluxDB(dataPath, sensorId)
+        for sensorId in dataService.getAllSensors():
+            task(sensorId)
     else:
-        dataService.exportToInfluxDB(dataPath, sensorId)
+        task(sensorId)
 
 
 if __name__ == "__main__":

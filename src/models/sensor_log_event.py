@@ -3,10 +3,10 @@
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 from datetime import datetime, timezone
-from enum import StrEnum
 from typing import Self
 from models.serializable import Serializable
 from models.sensor_event import (
+    EventType,
     SensorEvent,
     SensorHistogram,
     SensorPHT,
@@ -20,17 +20,6 @@ from models.sensor_event import (
 )
 from urnparse import URN8141, InvalidURNFormatError, NSSString, NSIdentifier
 import numpy as np
-
-
-class EventType(StrEnum):
-    HISTOGRAM = "histogram"
-    PHT = "pht"
-    acc = "acc"
-    GYRO = "gyro"
-    MAG = "mag"
-    EC = "ec"
-    P = "p"
-    MIC = "mic"
 
 
 @dataclass
@@ -83,7 +72,7 @@ class LoadDataVector:
 @dataclass
 class SensorLogEvent(Serializable["SensorLogEvent"]):
 
-    receiveTimestamp: datetime
+    receiveTimestamp: int
     load: list[
         SensorData
         | SensorDataNameOnly
@@ -96,24 +85,33 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
 
     @classmethod
     def deserialize(cls, text: str) -> Self:
-        timestampString, loadString = text.split("] ", 1)
-        receiveTimestamp = datetime.strptime(
-            timestampString.strip("[]"), "%Y-%m-%d %H:%M:%S"
-        ).replace(tzinfo=ZoneInfo("Europe/Stockholm"))
+        receiveTimeString, loadString = text.split("] ", 1)
+        receiveTime = datetime.strptime(
+            receiveTimeString.strip("[]"), "%Y-%m-%d %H:%M:%S"
+        )
         loadString = loadString.strip(" \n")
         loadString = loadString.replace("'", '"')
-        logEventJson = (
-            f'{{"receiveTimestamp": "{receiveTimestamp}", "load": {loadString}}}'
-        )
+        receiveTime = int(receiveTime.timestamp())
+        logEventJson = f'{{"receiveTimestamp": "{receiveTime}", "load": {loadString}}}'
         return super().deserialize(logEventJson)
 
     def toSensorEvent(self) -> SensorEvent:
-        urn = str(self.getURN())
-        sensorTimestamp = self.getSensorTimestamp()
+        urn = self.getOriginalURN()
+        sensorTime = self.getSensorTimestamp()
+        receiveTime = int(self.receiveTimestamp)
         eventType = self.getEventType()
         load = self.getLoad(eventType)
         # receiveTimestamp = datetime.fromisoformat(self.receiveTimestamp)
-        return SensorEvent(self.receiveTimestamp, sensorTimestamp, urn, load)
+        # receiveTimestamp = datetime.fromtimestamp(
+        #     int(self.receiveTimestamp), tz=timezone.utc
+        # )
+        return SensorEvent(
+            receiveTime,
+            sensorTime,
+            urn,
+            eventType,
+            load,
+        )
 
     # # Old
     # {"receiveTimestamp":1707922771,"load":[{"bn":"urn:dev:10000000aa212a2b:sensor","bt":1707922771583},{"n":"histogram","vs":"[0, 38, 56, 35, 22, 16, 1, 4, 8, 2, 4, 1, 7, 3, 2, 3, 1, 3, 3, 2, 3, 4, 4, 17, 7, 4, 3, 3, 2, 1, 1, 4, 8, 3, 6, 9, 12, 5, 6, 6, 6, 2, 6, 9, 8, 7, 6, 5, 10, 10, 5, 5, 7, 4, 4, 6, 11, 20, 10, 13, 15, 7, 7, 9, 11, 9, 10, 15, 10, 12, 6, 9, 12, 8, 12, 9, 13, 13, 12, 7, 6, 5, 18, 12, 18, 14, 10, 6, 8, 9, 12, 7, 9, 7, 12, 8, 10, 9, 12, 10, 11, 10, 15, 9, 10, 8, 8, 18, 13, 10, 16, 10, 9, 12, 10, 10, 9, 9, 8, 9, 13, 8, 14, 11, 8, 6, 9, 9, 8, 10, 10, 9, 11, 5, 6, 7, 8, 8, 9, 12, 5, 13, 7, 5, 8, 8, 7, 10, 5, 8, 8, 8, 14, 3, 6, 4, 8, 18, 9, 8, 9, 2, 5, 10, 5, 4, 6, 8, 4, 5, 6, 6, 6, 9, 5, 3, 8, 3, 4, 2, 4, 1, 3, 1, 3, 4, 4, 3, 7, 4, 1, 4, 2, 6, 4, 3, 0, 9, 4, 4, 3, 2, 3, 1, 5, 6, 5, 2, 2, 7, 5, 4, 2, 3, 6, 5, 3, 10, 8, 5, 6, 3, 10, 2, 1, 4, 4, 1, 4, 0, 0, 4, 3, 2, 2, 5, 5, 0, 2, 2, 1, 0, 2, 4, 3, 3, 1, 2, 3, 2, 1, 4, 4, 1, 3, 4, 1, 2, 1, 4, 6, 4, 2, 2, 0, 2, 0, 3, 3, 5, 3, 2, 0, 4, 0, 1, 2, 2, 1, 2, 3, 0, 0, 0, 1, 2, 2, 3, 2, 2, 1, 3, 3, 1, 1, 3, 1, 0, 0, 0, 1, 0, 2, 0, 0, 1, 1, 1, 0, 5, 0, 0, 1, 2, 1, 0, 2, 1, 0, 1, 1, 0, 0, 0, 0, 1, 3, 0, 1, 1, 0, 0, 1, 1, 3, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 0, 0, 0, 0, 92]"}]}
@@ -179,8 +177,11 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
             case _:
                 return SensorGatewayStatus(self.get("bn"))
 
+    def getOriginalURN(self) -> str:
+        return next((obj.get("bn") for obj in self.load if obj.get("bn")), None)
+
     def getURN(self) -> URN8141:
-        urnString = next((obj.get("bn") for obj in self.load if obj.get("bn")), None)
+        urnString = self.getOriginalURN()
         try:
             if self.isHistogramEvent() and "histogram" not in urnString:
                 return URN8141.from_string(f"{urnString}:histogram")
@@ -210,9 +211,6 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
             obj.get("n") == "histogram" or "histogram" in (obj.get("bn") or "")
             for obj in self.load
         )
-
-    def isUpdatedSensorEvent(self) -> bool:
-        return any(obj.get("n") == "histogram" for obj in self.load)
 
     def getSensorTimestamp(self) -> datetime:
         sensorTimestamp = next(

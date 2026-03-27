@@ -11,43 +11,53 @@ from data_recovery import DataRecovery
 
 class DataService:
 
-    def getAllSensors(self, path: str) -> list[str]:
-        directoryStorage = DirectoryStorage(path)
+    def __init__(self, dataPath, outPath):
+        self.dataPath = dataPath
+        self.outPath = outPath
+        self.directoryStorage = DirectoryStorage(dataPath)
+
+    def getAllSensors(self) -> list[str]:
         return [
             directory.stem
-            for directory in directoryStorage.listDirectories(None, sort=False)
+            for directory in self.directoryStorage.listDirectories(None, sort=False)
         ]
 
-    def collectDirectoryToFile(self, dataPath: str):
-        directoryStorage = DirectoryStorage(dataPath)
-        sensorsLogEvents = directoryStorage.getAll()
-        for sensorId, logEvents in sensorsLogEvents:
-            fileStorage = FileStorage[SensorEvent](
-                f"{dataPath}/{sensorId}.txt", SensorEvent
-            )
-            for logEvent in logEvents:
-                fileStorage.add(logEvent.toSensorEvent())
-
-    def recoverData(self, dataPath: str, sensorId):
-        fileStorageInput = FileStorage[SensorEvent](
-            f"{dataPath}/{sensorId}.txt", SensorEvent
-        )
-        events = fileStorageInput.get(sensorId)
-
+    def collectDirectoryToFile(self, sensorId: str, iso: bool):
+        logEvents = self.directoryStorage.get(sensorId)
+        events = [event.toSensorEvent() for event in logEvents]
         sensorEvents = SensorEvents(sensorId, events)
         recoverer = DataRecovery(sensorEvents)
-        sensorEvents = recoverer.recoverReceiveTimestamps()
-        # sensorEvents = recoverer.recoverSensorTimestamps()
+        sensorEvents = recoverer.recoverReceiveTime()  # .histogramEvents()
+        outputFilePath = f"{self.outPath}/{sensorId}.txt"
 
-        fileStorageOutput = FileStorage[SensorEvent](
-            f"{dataPath}/{sensorId}.fixed.txt", SensorEvent
-        )
+        if iso:
+            sensorEvents = sensorEvents.toIso()
+            outputFilePath = f"{self.outPath}/{sensorId}.iso.txt"
+
+        fileStorage = FileStorage[SensorEvent](outputFilePath, SensorEvent)
         for event in sensorEvents.events:
-            fileStorageOutput.add(event)
+            fileStorage.add(event)
 
-    def exportToInfluxDB(self, dataPath: str, sensorId):
+    def recoverData(self, sensorId):
+        fileStorageInput = FileStorage[SensorEvent](
+            f"{self.outPath}/{sensorId}.txt", SensorEvent
+        )
+        events = fileStorageInput.get(sensorId)
+        sensorEvents = SensorEvents(sensorId, events).noneStatusEvents()
+        if sensorEvents.empty():
+            print(f"Sensor {sensorEvents.sensorId} missing events")
+        else:
+            recoverer = DataRecovery(sensorEvents)
+            sensorEvents = recoverer.recoverSensorTime()
+            # fileStorageOutput = FileStorage[SensorEvent](
+            #     f"{self.outPath}/{sensorId}.recovered.txt", SensorEvent
+            # )
+            # for event in sensorEvents.events:
+            #     fileStorageOutput.add(event)
+
+    def exportToInfluxDB(self, sensorId):
         fileStorage = FileStorage[SensorEvent](
-            f"{dataPath}/{sensorId}.txt", SensorEvent
+            f"{self.outPath}/{sensorId}.txt", SensorEvent
         )
         events = fileStorage.get(
             id=sensorId,
@@ -72,23 +82,24 @@ class DataService:
 
     def plotReceiveDelay(self, sensorId):
         print(f"=============================== {sensorId}")
-        fileStorage = FileStorage[SensorEvent](
-            f"data/{sensorId}.clean.txt", SensorEvent
-        )
+        fileStorage = FileStorage[SensorEvent](f"data/{sensorId}.txt", SensorEvent)
         events = fileStorage.get(sensorId)
         sensorEvents = SensorEvents(sensorId, events)
-        quantile90 = sensorEvents.getReceiveDelayQuantile(0.95)
-        sensorEvents.plotReceiveDelay(quantile90)
+        if sensorEvents.empty():
+            print(f"Sensor {sensorEvents.sensorId} missing events")
+        else:
+            _, max, _ = sensorEvents.getReceiveDelayRange(0.95)
+            sensorEvents.plotReceiveDelay(max)
 
     def plotReceiveInterval(self, sensorId):
         print(f"=============================== {sensorId}")
-        fileStorage = FileStorage[SensorEvent](
-            f"data/{sensorId}.clean.txt", SensorEvent
-        )
+        fileStorage = FileStorage[SensorEvent](f"data/{sensorId}.txt", SensorEvent)
         events = fileStorage.get(sensorId)
-        sensorEvents = (
-            SensorEvents(sensorId, events).noneStatusEvents().histogramEvents()
-        )
-        # mean = sensorEvents.getReceiveIntervalMeanValueWithinQuantile(0.99)
-        # print(f"Receive interval mean value: {mean}")
-        sensorEvents.plotReceiveInterval(700)
+        sensorEvents = SensorEvents(
+            sensorId, events
+        ).noneStatusEvents()  # .histogramEvents()
+        if sensorEvents.empty():
+            print(f"Sensor {sensorEvents.sensorId} missing events")
+        else:
+            _, max, _ = sensorEvents.getReceiveIntervalRange(0.95)
+            sensorEvents.plotReceiveInterval(max)

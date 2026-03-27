@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 source .venv/bin/activate
-uv run src/main.py $@
+python3 src/main.py $@
 deactivate

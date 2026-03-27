@@ -37,17 +37,6 @@ class DirectoryStorage(Storage[SensorLogEvent]):
         else:
             return []
 
-    def getAll(self) -> list[tuple[str, list[SensorLogEvent]]]:
-        sensorsEvents = []
-        sensorDirectories = self.listDirectories(None, sort=False)
-
-        for sensorPath in sensorDirectories:
-            sensorId = sensorPath.stem
-            sensorEvents = self.get(sensorId)
-            sensorsEvents.append((sensorId, sensorEvents))
-
-        return sensorsEvents
-
     def add(self, event: SensorLogEvent) -> str:
         pass
 

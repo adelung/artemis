@@ -1,11 +1,25 @@
 # Data structure and aggregator for the sensor events for processing.
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+from enum import StrEnum
 from models.serializable import Serializable
+from urnparse import URN8141
 import matplotlib.pyplot as plt
 import mplcursors
 import numpy as np
+
+
+class EventType(StrEnum):
+    HISTOGRAM = "histogram"
+    PHT = "pht"
+    acc = "acc"
+    GYRO = "gyro"
+    MAG = "mag"
+    EC = "ec"
+    P = "p"
+    MIC = "mic"
 
 
 @dataclass
@@ -85,9 +99,10 @@ class SensorMic:
 @dataclass
 class SensorEvent(Serializable["SensorEvent"]):
 
-    receiveTimestamp: int
-    sensorTimestamp: int
+    receiveTimestamp: datetime | int
+    sensorTimestamp: datetime | int
     urn: str
+    eventType: EventType
     load: (
         SensorGatewayStatus
         | SensorHistogram
@@ -99,7 +114,16 @@ class SensorEvent(Serializable["SensorEvent"]):
         | SensorP
         | SensorMic
     )
-    new = True
+
+    def isUpdatedSensorEvent(self) -> bool:
+        urn = URN8141.from_string(self.urn)
+        urnParts = urn.specific_string.parts
+        device = next(iter(urnParts[1:2]), None)
+        eventTypeString = next(iter(urnParts[2:3]), None)
+        return device != "gw" and bool(eventTypeString)
+
+    def isHistogramEvent(self) -> bool:
+        return "histogram" in self.urn
 
 
 class SensorEvents:
@@ -108,77 +132,59 @@ class SensorEvents:
         self.sensorId = sensorId
         self.events = events
 
-    def getReceiveIntervalQuantile(self, quantile: float) -> float:
-        distribution = [
-            self.events[index + 1].receiveTimestamp
-            - self.events[index].receiveTimestamp
-            for index in range(len(self.events) - 1)
-        ]
-        quantileValue = np.quantile(distribution, quantile)
-        # print(f"sensorId: {self.sensorId} quantileValue: {quantileValue}")
-        # distribution = [value for value in distribution if abs(value) < quantileValue]
-        # fig, ax = plt.subplots()
-        # ax.hist(distribution, bins="auto", edgecolor="grey", alpha=0.7)
-        # plt.grid(True, alpha=0.3)
-        # self.addCursor(ax)
-        # plt.show()
-        return quantileValue
-
-    def getReceiveDelayQuantile(self, quantile: float) -> float:
+    def getReceiveDelayRange(self, quantile: float) -> (int, int, float):
         distribution = [
             event.receiveTimestamp - event.sensorTimestamp
             for event in self.events
             if event.sensorTimestamp
         ]
-        quantileValue = np.quantile(distribution, quantile)
-        # print(f"sensorId: {self.sensorId} quantileValue: {quantileValue}")
-        # distribution = [value for value in distribution if abs(value) < quantileValue]
-        # fig, ax = plt.subplots()
-        # ax.hist(distribution, bins="auto", edgecolor="grey", alpha=0.7)
-        # plt.grid(True, alpha=0.3)
-        # self.addCursor(ax)
-        # plt.show()
-        return quantileValue
+        min, max, mean = self._calcMinMaxMean(distribution, quantile)
+        print(
+            f"Receive delay mean: {mean}, range: {min} - {max} for sensor: {self.sensorId}"
+        )
+        return min, max, mean
 
-    def getReceiveIntervalMeanValueWithinQuantile(self, quantile: float) -> float:
+    def getReceiveIntervalRange(self, quantile: float) -> float:
         distribution = [
             self.events[index + 1].receiveTimestamp
             - self.events[index].receiveTimestamp
             for index in range(len(self.events) - 1)
         ]
+        min, max, mean = self._calcMinMaxMean(distribution, quantile)
+        print(
+            f"Receive interval mean: {mean}, range: {min} - {max} for sensor: {self.sensorId}"
+        )
+        return min, max, mean
+
+    def _calcMinMaxMean(self, distribution: list[int], quantile: float) -> list[int]:
+        quantileValue = np.quantile(distribution, quantile)
         qLower = np.quantile(distribution, 1 - quantile)
         qUpper = np.quantile(distribution, quantile)
         quantileRange = qUpper - qLower
-        lowerBound = qLower
-        upperBound = qUpper
+        lowerBound = qLower - 1.5 * quantileRange
+        upperBound = qUpper + 1.5 * quantileRange
         filteredDistribution = list(
             filter(
                 lambda value: value >= lowerBound and value <= upperBound, distribution
             )
         )
-        meanValue = np.mean(filteredDistribution)
-        # print(f"sensorId: {self.sensorId} quantileValue: {quantileValue}")
-        # distribution = [value for value in distribution if abs(value) < quantileValue]
-        # fig, ax = plt.subplots()
-        # ax.hist(distribution, bins="auto", edgecolor="grey", alpha=0.7)
-        # plt.grid(True, alpha=0.3)
-        # self.addCursor(ax)
-        # plt.show()
-        return meanValue
+        min = np.min(filteredDistribution)
+        max = np.max(filteredDistribution)
+        mean = np.mean(filteredDistribution)
+        return min, max, mean
 
-    # TODO: Maybe return another event (like pressure of gyro) timestamp instead of receiveTimestamp.
     def getSensorUpdateTime(self) -> datetime:
         firstEventAfterUpdateIndex = next(
             (i for i, event in enumerate(self.events) if event.isUpdatedSensorEvent()),
             None,
         )
-        if firstEventAfterUpdateIndex:
-            return self.events[firstEventAfterUpdateIndex - 1].receiveTimestamp
+        if firstEventAfterUpdateIndex is not None:
+            return self.events[firstEventAfterUpdateIndex].receiveTimestamp
 
     def histogramEvents(self) -> "SensorEvents":
         return SensorEvents(
             self.sensorId,
-            [event for event in self.events if "histogram" in event.urn],
+            [event for event in self.events if event.isHistogramEvent()],
         )
 
     def noneStatusEvents(self) -> "SensorEvents":
@@ -186,6 +192,30 @@ class SensorEvents:
             self.sensorId,
             [event for event in self.events if "gw" not in event.urn],
         )
+
+    def toIso(self) -> "SensorEvents":
+        return SensorEvents(
+            self.sensorId,
+            [
+                replace(
+                    event,
+                    receiveTimestamp=datetime.fromtimestamp(
+                        event.receiveTimestamp, tz=ZoneInfo("Europe/Stockholm")
+                    ),
+                    sensorTimestamp=(
+                        datetime.fromtimestamp(
+                            int(event.sensorTimestamp), tz=timezone.utc
+                        )
+                        if event.sensorTimestamp and event.sensorTimestamp <= 9999999999
+                        else None
+                    ),
+                )
+                for event in self.events
+            ],
+        )
+
+    def empty(self) -> bool:
+        return len(self.events) == 0
 
     def plotReceiveDelay(self, upTo: float):
         timeDistribution = []
@@ -195,18 +225,17 @@ class SensorEvents:
             if event.sensorTimestamp:
                 receiveTimestamp = event.receiveTimestamp
                 delay = receiveTimestamp - sensorTimestamp
-                if delay < upTo:
+                if delay <= upTo:
                     timeDistribution.append(delay)
-        fig, ax = plt.subplots()
-        ax.hist(timeDistribution, bins="auto", edgecolor="grey", alpha=0.7)
-        plt.title(f"Delay Histogram of {self.sensorId}")
-        plt.xlabel("Delay [s]")
-        plt.ylabel("Count")
-        plt.grid(True, alpha=0.3)
-        self.addCursor(ax)
-        plt.show()
+        self.plotHistogram(
+            timeDistribution,
+            f"Delay histogram of {self.sensorId}",
+            "Delay [s]",
+            "Count [#]",
+        )
 
     def plotReceiveInterval(self, upTo: float):
+        print(f"Plotting receive interval upto: {upTo} ignoring events bellow:")
         timeDistribution = []
         for index in range(len(self.events) - 1):
             currentEvent = self.events[index]
@@ -214,11 +243,11 @@ class SensorEvents:
             nextEvent = self.events[index + 1]
             nextEventTimestamp = nextEvent.receiveTimestamp
             interval = nextEventTimestamp - currentEventTimestamp
-            if interval < upTo:
+            if interval <= upTo:
                 timeDistribution.append(interval)
             else:
                 print(
-                    f"Event: {datetime.fromtimestamp(currentEvent.receiveTimestamp, tz=timezone.utc)} Interval: {interval}"
+                    f"Event: {currentEventTimestamp} {datetime.fromtimestamp(currentEventTimestamp, tz=ZoneInfo("Europe/Stockholm"))} Interval: {interval}"
                 )
             # if delay > 60 * 60:
             #     currentHistogram = currentEvent.load.histogram
@@ -230,11 +259,19 @@ class SensorEvents:
             #         )
             #         print(result)
             #         print("-----------------------------")
+        self.plotHistogram(
+            timeDistribution,
+            f"Interval histogram of {self.sensorId}",
+            "Interval [s]",
+            "Count [#]",
+        )
+
+    def plotHistogram(self, distribution, title: str, xLabel: str, yLabel: str):
         fig, ax = plt.subplots()
-        ax.hist(timeDistribution, bins="auto", edgecolor="grey", alpha=0.7)
-        plt.title(f"Interval of {self.sensorId}")
-        plt.xlabel("Interval [s]")
-        plt.ylabel("Count [#]")
+        ax.hist(distribution, bins="auto", edgecolor="grey", alpha=0.7)
+        plt.title(title)
+        plt.xlabel(xLabel)
+        plt.ylabel(yLabel)
         plt.grid(True, alpha=0.3)
         self.addCursor(ax)
         plt.show()

@@ -12,7 +12,8 @@ class FileStorage[T: Serializable](Storage[T]):
         self.cls = cls
         self.filePath = Path(path)
         self.filePath.parent.mkdir(parents=True, exist_ok=True)
-        self.filePath.touch(exist_ok=True)
+        if not self.filePath.exists():
+            self.filePath.touch(exist_ok=True)
 
     def add(self, item: T) -> str:
         with self.filePath.open("a") as file:
@@ -27,4 +28,5 @@ class FileStorage[T: Serializable](Storage[T]):
         pass
 
     def remove(self, id) -> bool:
-        pass
+        if self.filePath.exists():
+            self.filePath.unlink()
