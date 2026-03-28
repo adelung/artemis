@@ -27,8 +27,8 @@ class DataService:
         events = [event.toSensorEvent() for event in logEvents]
         sensorEvents = SensorEvents(sensorId, events)
         recoverer = DataRecovery(sensorEvents)
-        sensorEvents = recoverer.recoverReceiveTime()  # .histogramEvents()
-        outputFilePath = f"{self.outPath}/{sensorId}.txt"
+        sensorEvents = recoverer.recoverReceiveTime().noneStatusEvents()
+        outputFilePath = f"{self.outPath}/{sensorId}.noneStatus.txt"
 
         if iso:
             sensorEvents = sensorEvents.toIso()
@@ -49,11 +49,11 @@ class DataService:
         else:
             recoverer = DataRecovery(sensorEvents)
             sensorEvents = recoverer.recoverSensorTime()
-            # fileStorageOutput = FileStorage[SensorEvent](
-            #     f"{self.outPath}/{sensorId}.recovered.txt", SensorEvent
-            # )
-            # for event in sensorEvents.events:
-            #     fileStorageOutput.add(event)
+            fileStorageOutput = FileStorage[SensorEvent](
+                f"{self.outPath}/{sensorId}.recovered.txt", SensorEvent
+            )
+            for event in sensorEvents.events:
+                fileStorageOutput.add(event)
 
     def exportToInfluxDB(self, sensorId):
         fileStorage = FileStorage[SensorEvent](
@@ -84,7 +84,7 @@ class DataService:
         print(f"=============================== {sensorId}")
         fileStorage = FileStorage[SensorEvent](f"data/{sensorId}.txt", SensorEvent)
         events = fileStorage.get(sensorId)
-        sensorEvents = SensorEvents(sensorId, events)
+        sensorEvents = SensorEvents(sensorId, events).histogramEvents()
         if sensorEvents.empty():
             print(f"Sensor {sensorEvents.sensorId} missing events")
         else:

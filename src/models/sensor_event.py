@@ -123,7 +123,7 @@ class SensorEvent(Serializable["SensorEvent"]):
         return device != "gw" and bool(eventTypeString)
 
     def isHistogramEvent(self) -> bool:
-        return "histogram" in self.urn
+        return self.eventType == EventType.HISTOGRAM
 
 
 class SensorEvents:
