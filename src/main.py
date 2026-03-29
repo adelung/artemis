@@ -26,10 +26,11 @@ def collectToFile(
 @app.command()
 def plotReceiveDelay(
     sensorId: str = "",
+    recovered: Annotated[bool, typer.Option("--recovered")] = False,
 ):
     runAllSensors(
         sensorId,
-        lambda id: dataService.plotReceiveDelay(id),
+        lambda id: dataService.plotReceiveDelay(id, recovered),
     )
 
 
@@ -40,6 +41,17 @@ def plotReceiveInterval(
     runAllSensors(
         sensorId,
         lambda id: dataService.plotReceiveInterval(id),
+    )
+
+
+@app.command()
+def plotRadon(
+    sensorId: str = "",
+    recovered: Annotated[bool, typer.Option("--recovered")] = False,
+):
+    runAllSensors(
+        sensorId,
+        lambda id: dataService.plotRadon(id, recovered),
     )
 
 

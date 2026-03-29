@@ -28,7 +28,7 @@ class DataService:
         sensorEvents = SensorEvents(sensorId, events)
         recoverer = DataRecovery(sensorEvents)
         sensorEvents = recoverer.recoverReceiveTime().noneStatusEvents()
-        outputFilePath = f"{self.outPath}/{sensorId}.noneStatus.txt"
+        outputFilePath = f"{self.outPath}/{sensorId}.txt"
 
         if iso:
             sensorEvents = sensorEvents.toIso()
@@ -38,7 +38,7 @@ class DataService:
         for event in sensorEvents.events:
             fileStorage.add(event)
 
-    def recoverData(self, sensorId):
+    def recoverData(self, sensorId: str):
         fileStorageInput = FileStorage[SensorEvent](
             f"{self.outPath}/{sensorId}.txt", SensorEvent
         )
@@ -49,13 +49,14 @@ class DataService:
         else:
             recoverer = DataRecovery(sensorEvents)
             sensorEvents = recoverer.recoverSensorTime()
+            sensorEvents = recoverer.flattenHistogram()
             fileStorageOutput = FileStorage[SensorEvent](
                 f"{self.outPath}/{sensorId}.recovered.txt", SensorEvent
             )
             for event in sensorEvents.events:
                 fileStorageOutput.add(event)
 
-    def exportToInfluxDB(self, sensorId):
+    def exportToInfluxDB(self, sensorId: str):
         fileStorage = FileStorage[SensorEvent](
             f"{self.outPath}/{sensorId}.txt", SensorEvent
         )
@@ -80,18 +81,20 @@ class DataService:
         dbStorage = InfluxDBStorage(sensorId)
         dbStorage.add(points)
 
-    def plotReceiveDelay(self, sensorId):
+    def plotReceiveDelay(self, sensorId: str, recovered: bool):
         print(f"=============================== {sensorId}")
-        fileStorage = FileStorage[SensorEvent](f"data/{sensorId}.txt", SensorEvent)
+        fileStorage = FileStorage[SensorEvent](
+            f"data/{sensorId}{".recovered" if recovered else "" }.txt", SensorEvent
+        )
         events = fileStorage.get(sensorId)
-        sensorEvents = SensorEvents(sensorId, events).histogramEvents()
+        sensorEvents = SensorEvents(sensorId, events)
         if sensorEvents.empty():
             print(f"Sensor {sensorEvents.sensorId} missing events")
         else:
             _, max, _ = sensorEvents.getReceiveDelayRange(0.95)
             sensorEvents.plotReceiveDelay(max)
 
-    def plotReceiveInterval(self, sensorId):
+    def plotReceiveInterval(self, sensorId: str):
         print(f"=============================== {sensorId}")
         fileStorage = FileStorage[SensorEvent](f"data/{sensorId}.txt", SensorEvent)
         events = fileStorage.get(sensorId)
@@ -103,3 +106,12 @@ class DataService:
         else:
             _, max, _ = sensorEvents.getReceiveIntervalRange(0.95)
             sensorEvents.plotReceiveInterval(max)
+
+    def plotRadon(self, sensorId: str, recovered: bool):
+        print(f"=============================== {sensorId}")
+        fileStorage = FileStorage[SensorEvent](
+            f"data/{sensorId}{".recovered" if recovered else "" }.txt", SensorEvent
+        )
+        events = fileStorage.get(sensorId)
+        sensorEvents = SensorEvents(sensorId, events)
+        sensorEvents.plotHistogram()

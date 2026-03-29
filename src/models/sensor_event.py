@@ -178,7 +178,19 @@ class SensorEvents:
             (i for i, event in enumerate(self.events) if event.isUpdatedSensorEvent()),
             None,
         )
-        if firstEventAfterUpdateIndex is not None:
+        if firstEventAfterUpdateIndex is None:
+            lastEventBeforeUpdateIndex = next(
+                (
+                    i
+                    for i, event in enumerate(reversed(self.events))
+                    if not event.isUpdatedSensorEvent()
+                ),
+                None,
+            )
+            return self.events[
+                len(self.events) - (lastEventBeforeUpdateIndex + 1)
+            ].receiveTimestamp
+        else:
             return self.events[firstEventAfterUpdateIndex].receiveTimestamp
 
     def histogramEvents(self) -> "SensorEvents":
@@ -191,6 +203,13 @@ class SensorEvents:
         return SensorEvents(
             self.sensorId,
             [event for event in self.events if "gw" not in event.urn],
+        )
+
+    def beforeUpdateEvents(self) -> "SensorEvents":
+        updateTime = self.getSensorUpdateTime()
+        return SensorEvents(
+            self.sensorId,
+            [event for event in self.events if event.receiveTimestamp < updateTime],
         )
 
     def toIso(self) -> "SensorEvents":
@@ -220,14 +239,13 @@ class SensorEvents:
     def plotReceiveDelay(self, upTo: float):
         timeDistribution = []
         for event in self.events:
-            load = event.load
             sensorTimestamp = event.sensorTimestamp
             if event.sensorTimestamp:
                 receiveTimestamp = event.receiveTimestamp
                 delay = receiveTimestamp - sensorTimestamp
                 if delay <= upTo:
                     timeDistribution.append(delay)
-        self.plotHistogram(
+        self.plotBarChart(
             timeDistribution,
             f"Delay histogram of {self.sensorId}",
             "Delay [s]",
@@ -259,14 +277,36 @@ class SensorEvents:
             #         )
             #         print(result)
             #         print("-----------------------------")
-        self.plotHistogram(
+        self.plotBarChart(
             timeDistribution,
             f"Interval histogram of {self.sensorId}",
             "Interval [s]",
             "Count [#]",
         )
 
-    def plotHistogram(self, distribution, title: str, xLabel: str, yLabel: str):
+    def plotHistogram(self):
+        sensorTimestamps = list[int]()
+        histograms = list[float]()
+        histogramEvents = self.histogramEvents().events
+        for event in histogramEvents:
+            sensorTime = event.sensorTimestamp
+            if sensorTime:
+                sensorTimestamps.append(datetime.fromtimestamp(sensorTime))
+                histogram = SensorHistogram(**event.load).histogram
+                histogramIntegral = np.sum(histogram)
+                # if histogramIntegral > 100000:
+                #     print(event)
+                histograms.append(histogramIntegral)
+        fig, ax = plt.subplots()
+        ax.plot(sensorTimestamps, histograms, ".", label="Radon")
+        plt.title(f"Radon measurements of {self.sensorId}")
+        plt.xlabel("Sensor time")
+        plt.ylabel("Radon integral")
+        plt.grid(True, alpha=0.3)
+        self.addCursor(ax)
+        plt.show()
+
+    def plotBarChart(self, distribution, title: str, xLabel: str, yLabel: str):
         fig, ax = plt.subplots()
         ax.hist(distribution, bins="auto", edgecolor="grey", alpha=0.7)
         plt.title(title)

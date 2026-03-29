@@ -18,7 +18,7 @@
 #         Many histograms.
 #       Else If sensor error:
 #         Lost data.
-
+from dataclasses import replace
 from models.sensor_log_event import SensorLogEvent
 from models.sensor_event import SensorEvent, SensorEvents, EventType, SensorHistogram
 from datetime import timedelta, datetime, timezone
@@ -92,21 +92,19 @@ class DataRecovery:
             )
         )
         for i, event in enumerate(reversed(adjacentHistograms)):
-            event.sensorTimestamp = int(currentReceiveTimestamp - i * receiveIntervalMean)
+            event.sensorTimestamp = int(
+                currentReceiveTimestamp - i * receiveIntervalMean
+            )
 
     def recoverSensorTime(self) -> SensorEvents:
-        print(
-            f"=== Recovering sensor timestamp for sensor {self.sensorEvents.sensorId} ==="
-        )
-
         _, receiveIntervalMax, receiveIntervalMean = (
-            self.sensorEvents.getReceiveIntervalRange(0.9)
+            self.sensorEvents.getReceiveIntervalRange(0.98)
         )
         clumpReceiveIntervalThreshold = receiveIntervalMean / 2
         sensorUpdateTime = self.sensorEvents.getSensorUpdateTime()
 
         print(
-            f"Sensor update time: {sensorUpdateTime} {datetime.fromtimestamp(sensorUpdateTime, tz=ZoneInfo("Europe/Stockholm"))}"
+            f"=== Recovering sensor timestamp for sensor {self.sensorEvents.sensorId} update time: {sensorUpdateTime} {datetime.fromtimestamp(sensorUpdateTime, tz=ZoneInfo("Europe/Stockholm"))} ==="
         )
 
         histogramEvents = self.sensorEvents.histogramEvents().events
@@ -115,10 +113,7 @@ class DataRecovery:
             currentEvent = events[index]
             prevEvent = events[index - 1]
 
-            currentSensorTimestamp = currentEvent.sensorTimestamp
             currentReceiveTimestamp = currentEvent.receiveTimestamp
-
-            prevSensorTimestamp = prevEvent.sensorTimestamp
             prevReceiveTimestamp = prevEvent.receiveTimestamp
 
             # If receiveInterval is reasonable
@@ -134,19 +129,21 @@ class DataRecovery:
                 if beforeUpdate:
                     eventType = currentEvent.eventType
                     if eventType == EventType.HISTOGRAM:
-                        hisEventIndex = next(
+                        histogramEventIndex = next(
                             (
                                 i
                                 for i, event in enumerate(histogramEvents)
-                                if event.sensorTimestamp == currentReceiveTimestamp
+                                if event.receiveTimestamp == currentReceiveTimestamp
                             ),
                             None,
                         )
-                        hisPrevEvent = histogramEvents[hisEventIndex - 1]
+                        histogramPrevEvent = histogramEvents[histogramEventIndex - 1]
                         currentHistogram = SensorHistogram(
                             **currentEvent.load
                         ).histogram
-                        prevHistogram = SensorHistogram(**hisPrevEvent.load).histogram
+                        prevHistogram = SensorHistogram(
+                            **histogramPrevEvent.load
+                        ).histogram
                         difference = np.subtract(currentHistogram, prevHistogram)
                         negative = any(value < 0 for value in difference)
                         allZero = all(value == 0 for value in currentHistogram)
@@ -176,5 +173,63 @@ class DataRecovery:
                         receiveIntervalMean,
                         histogramEvents,
                     )
+
+        return self.sensorEvents
+
+    def flattenHistogram(self) -> SensorEvents:
+        print(
+            f"=== Flattening aggregated histogram for sensor {self.sensorEvents.sensorId} ==="
+        )
+
+        flattenedHistogramEvents = list[SensorEvent]()
+        sensorUpdateTime = self.sensorEvents.getSensorUpdateTime()
+        events = self.sensorEvents.histogramEvents().beforeUpdateEvents().events
+
+        if len(events) == 0:
+            return self.sensorEvents
+
+        firstEvent = events[0]
+        firstEventLoad = firstEvent.load
+        firstHistogramLength = len(firstEventLoad.get("histogram"))
+        zeroHistogram = SensorHistogram(
+            firstHistogramLength, histogram=[0 for i in range(firstHistogramLength)]
+        )
+        flattenedHistogramEvents.append(zeroHistogram)
+
+        for index in range(1, len(events)):
+            currentEvent = events[index]
+            prevEvent = events[index - 1]
+
+            currentReceiveTimestamp = currentEvent.receiveTimestamp
+            prevReceiveTimestamp = prevEvent.receiveTimestamp
+            beforeUpdate = currentReceiveTimestamp < sensorUpdateTime
+
+            currentLoad = currentEvent.load
+            currentHistogram = (
+                currentLoad
+                if isinstance(currentLoad, SensorHistogram)
+                else SensorHistogram(**currentLoad)
+            ).histogram
+            prevLoad = prevEvent.load
+            prevHistogram = (
+                prevLoad
+                if isinstance(prevLoad, SensorHistogram)
+                else SensorHistogram(**prevLoad)
+            ).histogram
+            difference = np.subtract(currentHistogram, prevHistogram)
+            negative = any(value < 0 for value in difference)
+            allZero = all(value == 0 for value in currentHistogram)
+
+            sensorHistogram = None
+            # Sensor crash Probably
+            if not (allZero or negative):
+                sensorHistogram = SensorHistogram(len(difference), difference.tolist())
+            else:
+                sensorHistogram = currentEvent.load
+
+            flattenedHistogramEvents.append(sensorHistogram)
+
+        for index, event in enumerate(events):
+            event.load = flattenedHistogramEvents[index]
 
         return self.sensorEvents
