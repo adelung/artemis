@@ -7,6 +7,7 @@ from enum import StrEnum
 from models.serializable import Serializable
 from urnparse import URN8141
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import mplcursors
 import numpy as np
 
@@ -299,6 +300,8 @@ class SensorEvents:
                 histograms.append(histogramIntegral)
         fig, ax = plt.subplots()
         ax.plot(sensorTimestamps, histograms, ".", label="Radon")
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+        plt.gcf().autofmt_xdate()
         plt.title(f"Radon measurements of {self.sensorId}")
         plt.xlabel("Sensor time")
         plt.ylabel("Radon integral")
