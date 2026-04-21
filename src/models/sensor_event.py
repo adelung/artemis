@@ -200,6 +200,12 @@ class SensorEvents:
             [event for event in self.events if event.isHistogramEvent()],
         )
 
+    def noneHistogramEvents(self) -> "SensorEvents":
+        return SensorEvents(
+            self.sensorId,
+            [event for event in self.events if not event.isHistogramEvent()],
+        )
+
     def noneStatusEvents(self) -> "SensorEvents":
         return SensorEvents(
             self.sensorId,
@@ -237,6 +243,42 @@ class SensorEvents:
     def empty(self) -> bool:
         return len(self.events) == 0
 
+    def plotSensorCaptures(self):
+        print(f"Plotting sensor capture")
+        captureTimes = []
+        for index in range(len(self.events) - 1):
+            currentEvent = self.events[index]
+            currentEventTimestamp = currentEvent.sensorTimestamp
+            captureTimes.append(currentEventTimestamp)
+        self.plotDateGraph(
+            range(len(captureTimes)),
+            captureTimes,
+            f"Sensor measurements of {self.sensorId}",
+            "Sensor time",
+            "1",
+        )
+
+    def plotSensorTimeInterval(self):
+        print(f"Plotting sensor interval")
+        timeDistribution = []
+        for index in range(len(self.events) - 1):
+            currentEvent = self.events[index]
+            currentEventTimestamp = currentEvent.sensorTimestamp
+            nextEvent = self.events[index + 1]
+            nextEventTimestamp = nextEvent.sensorTimestamp
+            interval = nextEventTimestamp - currentEventTimestamp
+            timeDistribution.append(interval)
+            if interval < 0:
+                print(
+                    f"Event: {currentEventTimestamp} {datetime.fromtimestamp(currentEventTimestamp, tz=ZoneInfo("Europe/Stockholm"))} Interval: {interval}"
+                )
+        self.plotBarChart(
+            timeDistribution,
+            f"Sensor interval histogram of {self.sensorId}",
+            "Interval [s]",
+            "Count [#]",
+        )
+
     def plotReceiveDelay(self, upTo: float):
         timeDistribution = []
         for event in self.events:
@@ -262,8 +304,9 @@ class SensorEvents:
             nextEvent = self.events[index + 1]
             nextEventTimestamp = nextEvent.receiveTimestamp
             interval = nextEventTimestamp - currentEventTimestamp
+            timeDistribution.append(interval)
             if interval <= upTo:
-                timeDistribution.append(interval)
+                pass
             else:
                 print(
                     f"Event: {currentEventTimestamp} {datetime.fromtimestamp(currentEventTimestamp, tz=ZoneInfo("Europe/Stockholm"))} Interval: {interval}"
@@ -280,7 +323,7 @@ class SensorEvents:
             #         print("-----------------------------")
         self.plotBarChart(
             timeDistribution,
-            f"Interval histogram of {self.sensorId}",
+            f"Receive interval histogram of {self.sensorId}",
             "Interval [s]",
             "Count [#]",
         )
@@ -298,20 +341,29 @@ class SensorEvents:
                 # if histogramIntegral > 100000:
                 #     print(event)
                 histograms.append(histogramIntegral)
-        fig, ax = plt.subplots()
-        ax.plot(sensorTimestamps, histograms, ".", label="Radon")
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-        plt.gcf().autofmt_xdate()
-        plt.title(f"Radon measurements of {self.sensorId}")
-        plt.xlabel("Sensor time")
-        plt.ylabel("Radon integral")
-        plt.grid(True, alpha=0.3)
-        self.addCursor(ax)
-        plt.show()
+        self.plotDateGraph(
+            sensorTimestamps,
+            histograms,
+            f"Radon measurements of {self.sensorId}",
+            "Sensor time",
+            "Radon integral",
+        )
 
     def plotBarChart(self, distribution, title: str, xLabel: str, yLabel: str):
         fig, ax = plt.subplots()
         ax.hist(distribution, bins="auto", edgecolor="grey", alpha=0.7)
+        plt.title(title)
+        plt.xlabel(xLabel)
+        plt.ylabel(yLabel)
+        plt.grid(True, alpha=0.3)
+        self.addCursor(ax)
+        plt.show()
+
+    def plotDateGraph(self, x, y, title: str, xLabel: str, yLabel: str):
+        fig, ax = plt.subplots()
+        ax.plot(x, y, ".")
+        # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+        # plt.gcf().autofmt_xdate()
         plt.title(title)
         plt.xlabel(xLabel)
         plt.ylabel(yLabel)

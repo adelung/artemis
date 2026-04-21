@@ -35,6 +35,28 @@ def plotReceiveDelay(
 
 
 @app.command()
+def plotSensorCaptures(
+    sensorId: str = "",
+    recovered: Annotated[bool, typer.Option("--recovered")] = False,
+):
+    runAllSensors(
+        sensorId,
+        lambda id: dataService.plotSensorCaptures(id, recovered),
+    )
+
+
+@app.command()
+def plotSensorInterval(
+    sensorId: str = "",
+    recovered: Annotated[bool, typer.Option("--recovered")] = False,
+):
+    runAllSensors(
+        sensorId,
+        lambda id: dataService.plotSensorInterval(id, recovered),
+    )
+
+
+@app.command()
 def plotReceiveInterval(
     sensorId: str = "",
 ):

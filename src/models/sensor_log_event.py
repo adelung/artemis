@@ -187,12 +187,6 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
         elif self.isHistogramEvent():
             return EventType.HISTOGRAM
 
-    def isHistogramEvent(self) -> bool:
-        return any(
-            obj.get("n") == "histogram" or "histogram" in (obj.get("bn") or "")
-            for obj in self.load
-        )
-
     def getSensorTimestamp(self) -> datetime:
         sensorTimestamp = next(
             (obj.get("bt") for obj in self.load if obj.get("bt") != None), None
@@ -223,3 +217,9 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
         )
         if itemString:
             return float(itemString)
+
+    def isHistogramEvent(self) -> bool:
+        return any(
+            obj.get("n") == "histogram" or "histogram" in (obj.get("bn") or "")
+            for obj in self.load
+        )

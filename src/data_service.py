@@ -53,6 +53,7 @@ class DataService:
             fileStorageOutput = FileStorage[SensorEvent](
                 f"{self.outPath}/{sensorId}.recovered.txt", SensorEvent
             )
+            fileStorageOutput.remove(sensorId)
             for event in sensorEvents.events:
                 fileStorageOutput.add(event)
 
@@ -80,6 +81,34 @@ class DataService:
         ]
         dbStorage = InfluxDBStorage(sensorId)
         dbStorage.add(points)
+
+    def plotSensorCaptures(self, sensorId: str, recovered: bool):
+        print(f"=============================== {sensorId}")
+        fileStorage = FileStorage[SensorEvent](
+            f"data/{sensorId}{".recovered" if recovered else "" }.txt", SensorEvent
+        )
+        events = fileStorage.get(sensorId)
+        sensorEvents = SensorEvents(
+            sensorId, events
+        ).noneStatusEvents().noneHistogramEvents()
+        if sensorEvents.empty():
+            print(f"Sensor {sensorEvents.sensorId} missing events")
+        else:
+            sensorEvents.plotSensorCaptures()
+
+    def plotSensorInterval(self, sensorId: str, recovered: bool):
+        print(f"=============================== {sensorId}")
+        fileStorage = FileStorage[SensorEvent](
+            f"data/{sensorId}{".recovered" if recovered else "" }.txt", SensorEvent
+        )
+        events = fileStorage.get(sensorId)
+        sensorEvents = SensorEvents(
+            sensorId, events
+        ).noneStatusEvents()  # .histogramEvents()
+        if sensorEvents.empty():
+            print(f"Sensor {sensorEvents.sensorId} missing events")
+        else:
+            sensorEvents.plotSensorTimeInterval()
 
     def plotReceiveDelay(self, sensorId: str, recovered: bool):
         print(f"=============================== {sensorId}")
