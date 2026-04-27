@@ -1,7 +1,3 @@
-# The structure of the directory is as follows:
-# The root directory containing a directory per sensor. Each sensor directory contains a directory
-# per year which includes a directory per month which includes a file per day.
-
 from repository.storage import Storage
 from models.sensor_log_event import SensorLogEvent
 from typing import Callable
@@ -9,11 +5,20 @@ from pathlib import Path
 
 
 class DirectoryStorage(Storage[SensorLogEvent]):
+    """
+    Directory storage that implements the Storage interface. Used for accessing the existing data before recovery.
+    The structure of the directory is as follows:
+    The root directory containing a directory per sensor. Each sensor directory contains a directory
+    per year which includes a directory per month which includes a file per day.
+    """
 
     def __init__(self, path: str):
         self.rootPath = Path(path)
 
     def listDirectories(self, path: Path, sort=True) -> list[str]:
+        """
+        List all directories inside path sorting if sort=True.
+        """
         dirPath = path if path else self.rootPath
         if dirPath.exists():
             dirlist = [item for item in dirPath.iterdir() if item.is_dir()]
@@ -26,6 +31,9 @@ class DirectoryStorage(Storage[SensorLogEvent]):
             return []
 
     def listFiles(self, path: Path | None, sort=True) -> list[str]:
+        """
+        List all files inside path sorting if sort=True.
+        """
         dirPath = path if path else self.rootPath
         if dirPath.exists():
             fileList = [item for item in dirPath.iterdir() if item.is_file()]
@@ -41,6 +49,9 @@ class DirectoryStorage(Storage[SensorLogEvent]):
         pass
 
     def get(self, id) -> list[SensorLogEvent]:
+        """
+        Get the list of all events for the sensor with id.
+        """
         sensorFiles = []
         sensorEvents = []
 

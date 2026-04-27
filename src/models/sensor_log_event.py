@@ -1,4 +1,4 @@
-# Data class for the sensor events as in the directory database.
+# Data classes for the sensor events as represented in the data set in the directory storage prior to recovery.
 
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
@@ -22,6 +22,7 @@ from urnparse import URN8141, InvalidURNFormatError, NSSString, NSIdentifier
 import numpy as np
 
 
+# Data classes following the naming convention of the sensor to read that data before processing.
 @dataclass
 class SensorData:
 
@@ -71,6 +72,9 @@ class LoadDataVector:
 
 @dataclass
 class SensorLogEvent(Serializable["SensorLogEvent"]):
+    """
+    SensorLogEvent represent the data structure to be read for recovery process.
+    """
 
     receiveTimestamp: int
     load: list[
@@ -85,6 +89,9 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
 
     @classmethod
     def deserialize(cls, text: str) -> Self:
+        """
+        Read text and deserialize it to SensorLogEvent.
+        """
         receiveTimeString, loadString = text.split("] ", 1)
         receiveTime = datetime.strptime(
             receiveTimeString.strip("[]"), "%Y-%m-%d %H:%M:%S"
@@ -96,6 +103,9 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
         return super().deserialize(logEventJson)
 
     def toSensorEvent(self) -> SensorEvent:
+        """
+        Converts SensorLogEvent to SensorEvent.
+        """
         urn = self.getOriginalURN()
         sensorTime = self.getSensorTimestamp()
         receiveTime = int(self.receiveTimestamp)
@@ -110,6 +120,9 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
         )
 
     def getLoad(self, eventType: EventType):
+        """
+        Get the load of the event.
+        """
         match eventType:
             case EventType.HISTOGRAM:
                 histogram = self.getHistogram()
@@ -159,9 +172,15 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
                 return SensorGatewayStatus(self.get("bn"))
 
     def getOriginalURN(self) -> str:
+        """
+        Get URN of the event unchanged.
+        """
         return next((obj.get("bn") for obj in self.load if obj.get("bn")), None)
 
     def getURN(self) -> URN8141:
+        """
+        Get URN fixing it before returning.
+        """
         urnString = self.getOriginalURN()
         try:
             if self.isHistogramEvent() and "histogram" not in urnString:
@@ -174,6 +193,9 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
             return URN8141(nid=nid, nss=nss)
 
     def getEventType(self) -> EventType:
+        """
+        Get the event type.
+        """
         urn = self.getURN()
         urnParts = urn.specific_string.parts
         device = next(iter(urnParts[1:2]), None)
@@ -188,6 +210,9 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
             return EventType.HISTOGRAM
 
     def getSensorTimestamp(self) -> datetime:
+        """
+        Get sensor timestamp.
+        """
         sensorTimestamp = next(
             (obj.get("bt") for obj in self.load if obj.get("bt") != None), None
         )
@@ -199,6 +224,9 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
             )
 
     def getHistogram(self) -> list[int]:
+        """
+        Get radon data histogram.
+        """
         histogramString = next(
             (
                 obj.get("vs")
@@ -211,6 +239,9 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
             return np.fromstring(histogramString[1:-1], dtype=int, sep=", ").tolist()
 
     def get(self, item) -> list[int]:
+        """
+        Get the value for the object with the name item.
+        """
         itemString = next(
             (obj.get("v") for obj in self.load if obj.get("n") == item),
             None,
@@ -219,6 +250,9 @@ class SensorLogEvent(Serializable["SensorLogEvent"]):
             return float(itemString)
 
     def isHistogramEvent(self) -> bool:
+        """
+        Return True if this event is a radon histogram event.
+        """
         return any(
             obj.get("n") == "histogram" or "histogram" in (obj.get("bn") or "")
             for obj in self.load

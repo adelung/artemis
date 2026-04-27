@@ -48,6 +48,9 @@ callback = BatchingCallback()
 
 
 class InfluxDBStorage(Storage[SensorDataPoint]):
+    """
+    InfluxDB storage that implements the Storage interface. Used for exporting the data to an InfluxDB instance.
+    """
 
     HOST: Final = "http://10.20.30.37:8181"
     TOKEN: Final = (
@@ -80,6 +83,9 @@ class InfluxDBStorage(Storage[SensorDataPoint]):
         )
 
     def add(self, items: list[SensorDataPoint]) -> str:
+        """
+        Append items to InfluxDB.
+        """
         self.client.write(items)
         # with self.client.write_api(write_options=InfluxDBStorage.WRITE_OPT) as api:
         #     api.write(bucket="my-bucket", record=items)

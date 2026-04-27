@@ -3,11 +3,14 @@ from typing import Annotated, Callable
 from data_service import DataService
 
 app = typer.Typer()
-dataService = DataService("./data", "./data")
+dataService = DataService("./data")
 
 
 @app.command()
 def sensors():
+    """
+    List available sensor ids in the data directory.
+    """
     sensorsIds = dataService.getAllSensors()
     print(sensorsIds)
 
@@ -17,10 +20,51 @@ def collectToFile(
     sensorId: str = "",
     iso: Annotated[bool, typer.Option("--iso")] = False,
 ):
-    runAllSensors(
+    """
+    Collect the sensor data to a single file with the sensorId as the name.
+    """
+    runForAllSensors(
         sensorId,
         lambda id: dataService.collectDirectoryToFile(id, iso),
     )
+
+
+@app.command()
+def recoverData(
+    sensorId: str = "",
+):
+    """
+    Run data recovery process.
+    """
+    runForAllSensors(
+        sensorId,
+        lambda id: dataService.recoverData(id),
+    )
+
+
+@app.command()
+def exportToInfluxDB(
+    sensorId: str = "",
+):
+    """
+    Export the recovered data to InfluxDB.
+    """
+    runForAllSensors(
+        sensorId,
+        lambda id: dataService.exportToInfluxDB(id),
+    )
+
+
+@app.command()
+def recoverAndMigrate(
+    sensorId: str = "",
+):
+    """
+    Gathers all sensor data to a file per sensor then recovers the timestamps and lastly exports the data to InfluxDB.
+    """
+    collectToFile(sensorId)
+    recoverData(sensorId)
+    exportToInfluxDB(sensorId)
 
 
 @app.command()
@@ -28,7 +72,10 @@ def plotReceiveDelay(
     sensorId: str = "",
     recovered: Annotated[bool, typer.Option("--recovered")] = False,
 ):
-    runAllSensors(
+    """
+    Plot the delay between sensor timestamp and receive timestamp before/after recovering timestamps.
+    """
+    runForAllSensors(
         sensorId,
         lambda id: dataService.plotReceiveDelay(id, recovered),
     )
@@ -39,7 +86,10 @@ def plotSensorCaptures(
     sensorId: str = "",
     recovered: Annotated[bool, typer.Option("--recovered")] = False,
 ):
-    runAllSensors(
+    """
+    Plot sensor timestamps before/after recovering timestamps.
+    """
+    runForAllSensors(
         sensorId,
         lambda id: dataService.plotSensorCaptures(id, recovered),
     )
@@ -50,7 +100,10 @@ def plotSensorInterval(
     sensorId: str = "",
     recovered: Annotated[bool, typer.Option("--recovered")] = False,
 ):
-    runAllSensors(
+    """
+    Plot interval between consecutive sensor timestamps before/after recovering timestamps.
+    """
+    runForAllSensors(
         sensorId,
         lambda id: dataService.plotSensorInterval(id, recovered),
     )
@@ -60,7 +113,10 @@ def plotSensorInterval(
 def plotReceiveInterval(
     sensorId: str = "",
 ):
-    runAllSensors(
+    """
+    Plot interval between consecutive receive timestamps.
+    """
+    runForAllSensors(
         sensorId,
         lambda id: dataService.plotReceiveInterval(id),
     )
@@ -71,40 +127,25 @@ def plotRadon(
     sensorId: str = "",
     recovered: Annotated[bool, typer.Option("--recovered")] = False,
 ):
-    runAllSensors(
+    """
+    Plot radon histogram data before/after recovering timestamps.
+    """
+    runForAllSensors(
         sensorId,
         lambda id: dataService.plotRadon(id, recovered),
     )
 
 
-@app.command()
-def recoverData(
-    sensorId: str = "",
-):
-    runAllSensors(
-        sensorId,
-        lambda id: dataService.recoverData(id),
-    )
-
-
-@app.command()
-def exportToInfluxDB(
-    sensorId: str = "",
-):
-    runAllSensors(
-        sensorId,
-        lambda id: dataService.exportToInfluxDB(id),
-    )
-
-
-def runAllSensors(
+def runForAllSensors(
     sensorId: str | None,
     task: Callable[[str], None],
 ):
-    if sensorId == "":
-        for sensorId in dataService.getAllSensors():
-            task(sensorId)
-    else:
+    """
+    If sensorId is missing run the task for all the sensors.
+    """
+    sensorIds = dataService.getAllSensors() if sensorId == "" else [sensorId]
+    for sensorId in sensorIds:
+        print(f"=============================== {sensorId} : {task.__qualname__}")
         task(sensorId)
 
 

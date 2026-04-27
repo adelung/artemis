@@ -1,23 +1,3 @@
-# If sensorTimestamp exist:
-#   If it is in sync with receiveTimestamp:
-#     Use it.
-#   Else:
-#     Sync it with receiveTimestamp by shifting the sensorTimestamp the interrupt amount of time to receiveTimestamp.
-# Else compare receiveTimestamp with previous receiveTimestamp.
-#   If Interval between receiveTimestamp is within 90 quantile of the period:
-#     use the receiveTimestamp as sensorTimestamp.
-#   Else:
-#     Separate data when accumulation is gone by comparing the sensor name and obj.bn:
-#     If Histogram has accumulated data (Dataset 1):
-#       If Net error:
-#         One large histogram or many histograms with almost same receiveTimestamp.
-#       Else If sensor error:
-#         Lost data
-#     Else fresh measurement (Dataset 2):
-#       If Net error:
-#         Many histograms.
-#       Else If sensor error:
-#         Lost data.
 from dataclasses import replace
 from models.sensor_log_event import SensorLogEvent
 from models.sensor_event import SensorEvent, SensorEvents, EventType, SensorHistogram
@@ -27,17 +7,22 @@ import numpy as np
 
 
 class DataRecovery:
+    """
+    DataRecovery class is responsible for various recovery methods used to recover sensor
+    timestamps. eg. DST misalignments and missing sensor timestamps.
+    """
 
     def __init__(self, sensorEvents: SensorEvents):
         self.sensorEvents = sensorEvents
 
     def recoverReceiveTime(self) -> SensorEvents:
-        print(f"=== Adjusting DST for sensor {self.sensorEvents.sensorId} ===")
-        events = self.sensorEvents.events
+        """
+        Recover overlapping or jumping receive time during the 1 hour DST time shift.
+        """
 
+        events = self.sensorEvents.events
         startDate = datetime.fromtimestamp(events[0].receiveTimestamp)
         endDate = datetime.fromtimestamp(events[-1].receiveTimestamp)
-
         latched = False
         latchUntil = None
         countFixes = 0
@@ -69,13 +54,18 @@ class DataRecovery:
         print(f"{countFixes} ReceiveTimestamps adjusted starting from {countStartTime}")
         return self.sensorEvents
 
-    def setSensorTimestamp(
+    def spreadSensorTimestamp(
         self,
         currentReceiveTimestamp,
         clumpReceiveIntervalThreshold,
         receiveIntervalMean,
         histogramEvents,
     ):
+        """
+        Spreads the clumped received timestamps within a clumpReceiveIntervalThreshold
+        by receiveIntervalMean and sets the sensor timestamp respectively.
+        """
+
         adjacentHistogramTimeMin = (
             currentReceiveTimestamp - clumpReceiveIntervalThreshold
         )
@@ -93,13 +83,30 @@ class DataRecovery:
         )
         for i, event in enumerate(reversed(adjacentHistograms)):
             event.sensorTimestamp = int(
-                currentReceiveTimestamp - i * receiveIntervalMean
+                adjacentHistogramTimeMax - i * receiveIntervalMean
             )
 
     def recoverSensorTime(self) -> SensorEvents:
         _, receiveIntervalMax, receiveIntervalMean = (
             self.sensorEvents.getReceiveIntervalRange(0.98)
         )
+        """
+        Recover sensor time stamp according to:
+        # compare receiveTimestamp with previous receiveTimestamp.
+        #   If Interval between receiveTimestamp is within 90 quantile of the period:
+        #     use the receiveTimestamp as sensorTimestamp.
+        #   Else:
+        #     Separate data when before and after update:
+        #     If Histogram has accumulated data (Before update):
+        #       Detect error type by checking radon histogram values.
+        #       If Net error (Histogram not reset):
+        #         Many histograms with almost same receiveTimestamp: Spread
+        #       Else If sensor error (Histogram reset to zero):
+        #         Lost data
+        #     Else fresh measurement (After update):
+        #       Many histograms with almost same receiveTimestamp: Spread
+        """
+
         clumpReceiveIntervalThreshold = receiveIntervalMean / 2
         sensorUpdateTime = self.sensorEvents.getSensorUpdateTime()
 
@@ -116,7 +123,7 @@ class DataRecovery:
             currentReceiveTimestamp = currentEvent.receiveTimestamp
             prevReceiveTimestamp = prevEvent.receiveTimestamp
 
-            # If receiveInterval is reasonable
+            # If receiveInterval is reasonable use receive timestamp as sensor timestamp
             receiveInterval = currentReceiveTimestamp - prevReceiveTimestamp
             if receiveInterval <= receiveIntervalMax:
                 currentEvent.sensorTimestamp = currentReceiveTimestamp
@@ -157,29 +164,30 @@ class DataRecovery:
                             print(
                                 f"Connection lost! Distributing clumped events receive timestamp"
                             )
-                            self.setSensorTimestamp(
+                            self.spreadSensorTimestamp(
                                 currentReceiveTimestamp,
                                 clumpReceiveIntervalThreshold,
                                 receiveIntervalMean,
-                                histogramEvents,
+                                events,
                             )
-                            # print(adjacentHistograms)
 
                 # Fresh histogram measurements
                 else:
-                    self.setSensorTimestamp(
+                    self.spreadSensorTimestamp(
                         currentReceiveTimestamp,
                         clumpReceiveIntervalThreshold,
                         receiveIntervalMean,
-                        histogramEvents,
+                        events,
                     )
 
         return self.sensorEvents
 
     def flattenHistogram(self) -> SensorEvents:
-        print(
-            f"=== Flattening aggregated histogram for sensor {self.sensorEvents.sensorId} ==="
-        )
+        """
+        Flattening radon histogram data for the radon sensor measurements before updating
+        the sensors. Each radon measurement is subtracted from the previous measurement
+        and the difference is used as the measured value during that time interval.
+        """
 
         flattenedHistogramEvents = list[SensorEvent]()
         sensorUpdateTime = self.sensorEvents.getSensorUpdateTime()

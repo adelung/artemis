@@ -23,6 +23,7 @@ class EventType(StrEnum):
     MIC = "mic"
 
 
+# Data classes mapping the sensor event measurement in order to be processed.
 @dataclass
 class SensorMeasurement(Serializable["SensorMeasurement"]):
 
@@ -99,6 +100,9 @@ class SensorMic:
 
 @dataclass
 class SensorEvent(Serializable["SensorEvent"]):
+    """
+    SensorEvent is the main data structure modeling a sensor event while the data is being processed.
+    """
 
     receiveTimestamp: datetime | int
     sensorTimestamp: datetime | int
@@ -117,6 +121,9 @@ class SensorEvent(Serializable["SensorEvent"]):
     )
 
     def isUpdatedSensorEvent(self) -> bool:
+        """
+        Return True if this sensor event after updating the sensor.
+        """
         urn = URN8141.from_string(self.urn)
         urnParts = urn.specific_string.parts
         device = next(iter(urnParts[1:2]), None)
@@ -124,16 +131,25 @@ class SensorEvent(Serializable["SensorEvent"]):
         return device != "gw" and bool(eventTypeString)
 
     def isHistogramEvent(self) -> bool:
+        """
+        Return True if this sensor event is a radon sensor event.
+        """
         return self.eventType == EventType.HISTOGRAM
 
 
 class SensorEvents:
+    """
+    Aggregator for sensor event in order to process consecutive events or plot the data series.
+    """
 
     def __init__(self, sensorId: str, events: list[SensorEvent]):
         self.sensorId = sensorId
         self.events = events
 
     def getReceiveDelayRange(self, quantile: float) -> (int, int, float):
+        """
+        Return the range and mean value of the delays between sensor timestamps and receive timestamps within quantile.
+        """
         distribution = [
             event.receiveTimestamp - event.sensorTimestamp
             for event in self.events
@@ -145,7 +161,10 @@ class SensorEvents:
         )
         return min, max, mean
 
-    def getReceiveIntervalRange(self, quantile: float) -> float:
+    def getReceiveIntervalRange(self, quantile: float) -> (int, int, float):
+        """
+        Return the range and mean value of the interval between consecutive receive timestamps within quantile.
+        """
         distribution = [
             self.events[index + 1].receiveTimestamp
             - self.events[index].receiveTimestamp
@@ -158,6 +177,9 @@ class SensorEvents:
         return min, max, mean
 
     def _calcMinMaxMean(self, distribution: list[int], quantile: float) -> list[int]:
+        """
+        Computes the min, max and mean value of the distribution.
+        """
         quantileValue = np.quantile(distribution, quantile)
         qLower = np.quantile(distribution, 1 - quantile)
         qUpper = np.quantile(distribution, quantile)
@@ -175,6 +197,9 @@ class SensorEvents:
         return min, max, mean
 
     def getSensorUpdateTime(self) -> datetime:
+        """
+        Returns the update time of the sensor.
+        """
         firstEventAfterUpdateIndex = next(
             (i for i, event in enumerate(self.events) if event.isUpdatedSensorEvent()),
             None,
@@ -195,24 +220,36 @@ class SensorEvents:
             return self.events[firstEventAfterUpdateIndex].receiveTimestamp
 
     def histogramEvents(self) -> "SensorEvents":
+        """
+        Returns SensorEvents with only the radon histogram events in it.
+        """
         return SensorEvents(
             self.sensorId,
             [event for event in self.events if event.isHistogramEvent()],
         )
 
     def noneHistogramEvents(self) -> "SensorEvents":
+        """
+        Returns SensorEvents without the radon histogram events in it.
+        """
         return SensorEvents(
             self.sensorId,
             [event for event in self.events if not event.isHistogramEvent()],
         )
 
     def noneStatusEvents(self) -> "SensorEvents":
+        """
+        Returns SensorEvents without the sensor status events in it.
+        """
         return SensorEvents(
             self.sensorId,
             [event for event in self.events if "gw" not in event.urn],
         )
 
     def beforeUpdateEvents(self) -> "SensorEvents":
+        """
+        Returns SensorEvents prior to the sensor update.
+        """
         updateTime = self.getSensorUpdateTime()
         return SensorEvents(
             self.sensorId,
@@ -220,6 +257,9 @@ class SensorEvents:
         )
 
     def toIso(self) -> "SensorEvents":
+        """
+        Returns SensorEvents with the dates presented in ISO.
+        """
         return SensorEvents(
             self.sensorId,
             [
@@ -241,25 +281,32 @@ class SensorEvents:
         )
 
     def empty(self) -> bool:
+        """
+        Returns True if SensorEvents is empty.
+        """
         return len(self.events) == 0
 
     def plotSensorCaptures(self):
-        print(f"Plotting sensor capture")
+        """
+        Plot SensorEvents sensor timestamps.
+        """
         captureTimes = []
         for index in range(len(self.events) - 1):
             currentEvent = self.events[index]
             currentEventTimestamp = currentEvent.sensorTimestamp
             captureTimes.append(currentEventTimestamp)
         self.plotDateGraph(
-            range(len(captureTimes)),
             captureTimes,
+            range(len(captureTimes)),
             f"Sensor measurements of {self.sensorId}",
-            "Sensor time",
-            "1",
+            "Epoch",
+            "Event #",
         )
 
     def plotSensorTimeInterval(self):
-        print(f"Plotting sensor interval")
+        """
+        Plot SensorEvents consecutive sensor timestamps interval in a bar chart.
+        """
         timeDistribution = []
         for index in range(len(self.events) - 1):
             currentEvent = self.events[index]
@@ -280,6 +327,9 @@ class SensorEvents:
         )
 
     def plotReceiveDelay(self, upTo: float):
+        """
+        Plot receive delay between sensor and receive timestamps in a bar chart.
+        """
         timeDistribution = []
         for event in self.events:
             sensorTimestamp = event.sensorTimestamp
@@ -293,10 +343,13 @@ class SensorEvents:
             f"Delay histogram of {self.sensorId}",
             "Delay [s]",
             "Count [#]",
+            log=True,
         )
 
     def plotReceiveInterval(self, upTo: float):
-        print(f"Plotting receive interval upto: {upTo} ignoring events bellow:")
+        """
+        Plot receive delay between consecutive receive timestamps in a bar chart.
+        """
         timeDistribution = []
         for index in range(len(self.events) - 1):
             currentEvent = self.events[index]
@@ -326,9 +379,13 @@ class SensorEvents:
             f"Receive interval histogram of {self.sensorId}",
             "Interval [s]",
             "Count [#]",
+            log=True,
         )
 
     def plotHistogram(self):
+        """
+        Plot radon histogram.
+        """
         sensorTimestamps = list[int]()
         histograms = list[float]()
         histogramEvents = self.histogramEvents().events
@@ -349,13 +406,18 @@ class SensorEvents:
             "Radon integral",
         )
 
-    def plotBarChart(self, distribution, title: str, xLabel: str, yLabel: str):
+    def plotBarChart(
+        self, distribution, title: str, xLabel: str, yLabel: str, log=False
+    ):
         fig, ax = plt.subplots()
         ax.hist(distribution, bins="auto", edgecolor="grey", alpha=0.7)
         plt.title(title)
         plt.xlabel(xLabel)
         plt.ylabel(yLabel)
         plt.grid(True, alpha=0.3)
+        if log:
+            # plt.xscale("log")
+            plt.yscale("log")
         self.addCursor(ax)
         plt.show()
 

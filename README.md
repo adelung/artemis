@@ -1,32 +1,39 @@
 # Artemis
-This is a data management script for old sensor data for the Artemis project.
+Artemis is an EU sponsored radon measurement project with the aim of gathering measurements from sensors placed in various locations of importance to seismology. This repository is for data management and recovery script for old sensor data measurements.
 
-## setup
+### What are these scripts about
+These scripts provides the means to list each sensor data in a single file and processes the existing timestamps while also recovering the missing timestamps by statistical means and finally exporting the data to an InfluxDB instance.
 
-### How to setup the python environment.
+## How to
+
+### Setup
+First setup python environment and install the dependencies:
 ```shell
 python -m .venv .
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Run
+### Run
+To list available commands:
+```shell
+./artemis --help
+```
+
+or using python directly:
 ```shell
 source .venv/bin/activate
 python src/main.py --help
 deactivate
 ```
 
-### Migrating from a directory structure to a single file per sensor.
-`python src/main.py migrate`
-
-### List all sensors.
-`python src/main.py sensors`
+## Class diagram
+![Alt text](KEX_Class_diagram.drawio.svg)
 
 ## TODO:
-- Put together all the files.
-- Compare the times.
-- Check the gaps.
-- Fix summer to winter and vice versa time jumps
-- Fix Accumulated histogram data.
-- Export to InfluxDB.
+- [x] Put together all the files of a single sensor.
+- [x] Fix DST time overlaps and time jumps.
+- [x] Flatten accumulated histogram data.
+- [x] Recover missing timestamps.
+- [x] Export to InfluxDB.
+- [x] UML Class diagram.
