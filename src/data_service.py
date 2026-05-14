@@ -69,7 +69,7 @@ class DataService:
             for event in sensorEvents.events:
                 fileStorageOutput.add(event)
 
-    def exportToInfluxDB(self, sensorId: str):
+    def exportToInfluxDB(self, sensorId: str, startTime: datetime, endTime: datetime):
         """
         Export the recovered data to InfluxDB for sensorId.
         """
@@ -80,9 +80,10 @@ class DataService:
             id=sensorId,
             transformer=lambda itemStr: SensorLogEvent.deserialize(itemStr),
         )
+        sensorEvents = SensorEvents(sensorId, events).between(startTime, endTime)
         dataPoints = [
             SensorDataPoint.fromSensorEvent(sensorId=sensorId, event=event)
-            for event in events
+            for event in sensorEvents.events
             if any(obj.get("n") == "counts" for obj in event.load)
         ]
         points = [

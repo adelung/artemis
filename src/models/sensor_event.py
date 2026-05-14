@@ -266,6 +266,15 @@ class SensorEvents:
             [event for event in self.events if event.receiveTimestamp > updateTime],
         )
 
+    def between(self, startTime: datetime, endTime: datetime) -> "SensorEvents":
+        """
+        Returns SensorEvents within the time interval.
+        """
+        return SensorEvents(
+            self.sensorId,
+            [event for event in self.events if event.sensorTimestamp > startTime and event.sensorTimestamp < endTime],
+        )
+
     def toIso(self) -> "SensorEvents":
         """
         Returns SensorEvents with the dates presented in ISO.

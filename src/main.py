@@ -1,6 +1,7 @@
 import typer
 from typing import Annotated, Callable
 from data_service import DataService
+from datetime import datetime
 
 app = typer.Typer()
 dataService = DataService("./data")
@@ -45,26 +46,30 @@ def recoverData(
 @app.command()
 def exportToInfluxDB(
     sensorId: str = "",
+    stratTime: datetime = datetime(1970, 1, 1, 0, 0, 0),
+    endTime: datetime = datetime.now(),
 ):
     """
     Export the recovered data to InfluxDB.
     """
     runForAllSensors(
         sensorId,
-        lambda id: dataService.exportToInfluxDB(id),
+        lambda id: dataService.exportToInfluxDB(id, startTime, endTime),
     )
 
 
 @app.command()
 def recoverAndMigrate(
     sensorId: str = "",
+    stratTime: datetime = datetime(1970, 1, 1, 0, 0, 0),
+    endTime: datetime = datetime.now(),
 ):
     """
     Gathers all sensor data to a file per sensor then recovers the timestamps and lastly exports the data to InfluxDB.
     """
     collectToFile(sensorId)
     recoverData(sensorId)
-    exportToInfluxDB(sensorId)
+    exportToInfluxDB(sensorId, startTime, endTime)
 
 
 @app.command()

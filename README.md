@@ -27,6 +27,12 @@ python src/main.py --help
 deactivate
 ```
 
+#### Run All
+Run data recovery and export to InfluxDB all in one command.
+```shell
+./artemis recoverAndMigrate
+```
+
 ## Class diagram
 ![Alt text](KEX_Class_diagram.drawio.svg)
 
