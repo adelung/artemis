@@ -42,7 +42,7 @@ class SensorGatewayStatus:
 class SensorHistogram:
 
     size: int
-    histogram: list[float]
+    histogram: list[int]
 
 
 @dataclass
@@ -256,6 +256,16 @@ class SensorEvents:
             [event for event in self.events if event.receiveTimestamp < updateTime],
         )
 
+    def afterUpdateEvents(self) -> "SensorEvents":
+        """
+        Returns SensorEvents after to the sensor update.
+        """
+        updateTime = self.getSensorUpdateTime()
+        return SensorEvents(
+            self.sensorId,
+            [event for event in self.events if event.receiveTimestamp > updateTime],
+        )
+
     def toIso(self) -> "SensorEvents":
         """
         Returns SensorEvents with the dates presented in ISO.
@@ -294,7 +304,8 @@ class SensorEvents:
         for index in range(len(self.events) - 1):
             currentEvent = self.events[index]
             currentEventTimestamp = currentEvent.sensorTimestamp
-            captureTimes.append(currentEventTimestamp)
+            if currentEventTimestamp:
+                captureTimes.append(currentEventTimestamp)
         self.plotDateGraph(
             captureTimes,
             range(len(captureTimes)),
@@ -313,8 +324,9 @@ class SensorEvents:
             currentEventTimestamp = currentEvent.sensorTimestamp
             nextEvent = self.events[index + 1]
             nextEventTimestamp = nextEvent.sensorTimestamp
-            interval = nextEventTimestamp - currentEventTimestamp
-            timeDistribution.append(interval)
+            if currentEventTimestamp and nextEventTimestamp:
+                interval = nextEventTimestamp - currentEventTimestamp
+                timeDistribution.append(interval)
             if interval < 0:
                 print(
                     f"Event: {currentEventTimestamp} {datetime.fromtimestamp(currentEventTimestamp, tz=ZoneInfo("Europe/Stockholm"))} Interval: {interval}"
@@ -357,9 +369,8 @@ class SensorEvents:
             nextEvent = self.events[index + 1]
             nextEventTimestamp = nextEvent.receiveTimestamp
             interval = nextEventTimestamp - currentEventTimestamp
-            timeDistribution.append(interval)
             if interval <= upTo:
-                pass
+                timeDistribution.append(interval)
             else:
                 print(
                     f"Event: {currentEventTimestamp} {datetime.fromtimestamp(currentEventTimestamp, tz=ZoneInfo("Europe/Stockholm"))} Interval: {interval}"
@@ -382,7 +393,7 @@ class SensorEvents:
             log=True,
         )
 
-    def plotHistogram(self):
+    def plotRadonHistogram(self):
         """
         Plot radon histogram.
         """
@@ -395,8 +406,6 @@ class SensorEvents:
                 sensorTimestamps.append(datetime.fromtimestamp(sensorTime))
                 histogram = SensorHistogram(**event.load).histogram
                 histogramIntegral = np.sum(histogram)
-                # if histogramIntegral > 100000:
-                #     print(event)
                 histograms.append(histogramIntegral)
         self.plotDateGraph(
             sensorTimestamps,
@@ -414,6 +423,7 @@ class SensorEvents:
         plt.title(title)
         plt.xlabel(xLabel)
         plt.ylabel(yLabel)
+        # plt.xlim(0, 1000)
         plt.grid(True, alpha=0.3)
         if log:
             # plt.xscale("log")

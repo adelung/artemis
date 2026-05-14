@@ -168,4 +168,4 @@ class DataService:
         )
         events = fileStorage.get(sensorId)
         sensorEvents = SensorEvents(sensorId, events)
-        sensorEvents.plotHistogram()
+        sensorEvents.plotRadonHistogram()
